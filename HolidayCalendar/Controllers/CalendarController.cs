@@ -19,9 +19,25 @@ public class CalendarController : Controller
         _logger = logger;
     }
 
-    public IActionResult Index(DateTime? date)
+    public IActionResult Index(DateTime? date, int? month, int? year)
     {
-        var currentDate = date?.Date ?? DateTime.UtcNow.Date;
+        DateTime currentDate;
+
+        if (month.HasValue && year.HasValue)
+        {
+            // If month and year are provided via dropdowns
+            currentDate = new DateTime(year.Value, month.Value, 1, 0, 0, 0, DateTimeKind.Utc);
+        }
+        else if (date.HasValue)
+        {
+            // If date is provided via Previous/Next buttons
+            currentDate = date.Value;
+        }
+        else
+        {
+            // Default to current date
+            currentDate = DateTime.UtcNow.Date;
+        }
 
         // Convert to UTC
         var firstDayOfMonth = new DateTime(currentDate.Year, currentDate.Month, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -209,8 +225,6 @@ public class CalendarController : Controller
         }
     }
 
-
-
     public IActionResult ExportToExcel(DateTime date)
     {
         try
@@ -318,6 +332,114 @@ public class CalendarController : Controller
             _logger.LogError(ex, "Error exporting to CSV");
             TempData["Error"] = "Failed to export to CSV. Please try again.";
             return RedirectToAction(nameof(Index), new { date });
+        }
+    }
+
+    public IActionResult ExportYearToExcel(int year)
+    {
+        try
+        {
+            // Get first and last day of the selected year
+            var firstDayOfYear = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var lastDayOfYear = new DateTime(year, 12, 31, 23, 59, 59, DateTimeKind.Utc);
+
+            // Get events for the selected year
+            var events = _context.Events
+                .Where(e => e.Date >= firstDayOfYear && e.Date <= lastDayOfYear)
+                .OrderBy(e => e.Date)
+                .ToList();
+
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+            using (var package = new ExcelPackage())
+            {
+                // Create worksheet for the entire year
+                var yearSheet = package.Workbook.Worksheets.Add($"Events {year}");
+
+                // Set headers
+                yearSheet.Cells["A1"].Value = "Date";
+                yearSheet.Cells["B1"].Value = "Title";
+                yearSheet.Cells["C1"].Value = "Description";
+
+                // Style header row
+                var headerRange = yearSheet.Cells["A1:C1"];
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+
+                // Add data
+                int row = 2;
+                foreach (var evt in events)
+                {
+                    yearSheet.Cells[row, 1].Value = evt.Date.ToLocalTime().ToString("MM/dd/yyyy");
+                    yearSheet.Cells[row, 2].Value = evt.Title;
+                    yearSheet.Cells[row, 3].Value = evt.Description;
+                    row++;
+                }
+
+                // Auto-fit columns
+                yearSheet.Cells[yearSheet.Dimension.Address].AutoFitColumns();
+
+                // Set content type and filename
+                var contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                var fileName = $"Calendar_Events_{year}.xlsx";
+
+                return File(package.GetAsByteArray(), contentType, fileName);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting year to Excel");
+            TempData["Error"] = "Failed to export year to Excel. Please try again.";
+            return RedirectToAction(nameof(Index), new { year });
+        }
+    }
+
+    public IActionResult ExportYearToCsv(int year)
+    {
+        try
+        {
+            var firstDayOfYear = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var lastDayOfYear = new DateTime(year, 12, 31, 23, 59, 59, DateTimeKind.Utc);
+
+            var events = _context.Events
+                .Where(e => e.Date >= firstDayOfYear && e.Date <= lastDayOfYear)
+                .OrderBy(e => e.Date)
+                .ToList();
+
+            var memoryStream = new MemoryStream();
+            var writer = new StreamWriter(memoryStream);
+
+            // Add UTF-8 BOM
+            byte[] bom = new byte[] { 0xEF, 0xBB, 0xBF };
+            memoryStream.Write(bom, 0, bom.Length);
+
+            // Write headers
+            writer.WriteLine("Date,Title,Description");
+
+            // Write data
+            foreach (var evt in events)
+            {
+                var dateStr = $"\"{evt.Date.ToString("yyyy-MM-dd")}\"";
+                var title = EscapeCsvField(evt.Title);
+                var description = EscapeCsvField(evt.Description ?? "");
+
+                writer.WriteLine($"{dateStr},{title},{description}");
+            }
+
+            writer.Flush();
+            memoryStream.Position = 0;
+
+            return File(
+                memoryStream.ToArray(),
+                "application/vnd.ms-excel; charset=utf-8",
+                $"Calendar_Events_{year}.csv");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting year to CSV");
+            TempData["Error"] = "Failed to export year to CSV. Please try again.";
+            return RedirectToAction(nameof(Index), new { year });
         }
     }
 
