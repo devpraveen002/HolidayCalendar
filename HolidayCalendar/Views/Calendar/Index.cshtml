@@ -1,0 +1,198 @@
+﻿@model CalendarViewModel
+@{
+    var currentDate = Model.CurrentDate.ToLocalTime();
+    var firstDayOfMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+    var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+    var firstDayOfWeek = firstDayOfMonth.AddDays(-(int)firstDayOfMonth.DayOfWeek);
+}
+
+<div class="container-fluid mt-4">
+    <div class="card">
+        <div class="card-header bg-white">
+    <div class="d-flex justify-content-between align-items-center">
+        @using (Html.BeginForm("Index", "Calendar", FormMethod.Get, new { @class = "d-flex align-items-center gap-2" }))
+        {
+            <div class="d-flex gap-2 align-items-center">
+                <select name="month" class="form-select" style="min-width: 130px;">
+                    @for (int i = 1; i <= 12; i++)
+                    {
+                        var monthName = new DateTime(2024, i, 1).ToString("MMMM");
+                        if (i == Model.CurrentDate.Month)
+                        {
+                            <option value="@i" selected>@monthName</option>
+                        }
+                        else
+                        {
+                            <option value="@i">@monthName</option>
+                        }
+                    }
+                </select>
+
+                <select name="year" class="form-select">
+                    @{
+                        int currentYear = DateTime.UtcNow.Year;
+                        for (int year = currentYear - 5; year <= currentYear + 5; year++)
+                        {
+                            if (year == Model.CurrentDate.Year)
+                            {
+                                <option value="@year" selected>@year</option>
+                            }
+                            else
+                            {
+                                <option value="@year">@year</option>
+                            }
+                        }
+                    }
+                </select>
+                <button type="submit" class="btn btn-primary">Go</button>
+            </div>
+        }
+        <div>
+            <a asp-action="Index" asp-route-date="@Model.CurrentDate.AddMonths(-1).ToString("yyyy-MM-dd")" 
+               class="btn btn-outline-primary">Previous</a>
+            <a asp-action="Index" asp-route-date="@Model.CurrentDate.AddMonths(1).ToString("yyyy-MM-dd")" 
+               class="btn btn-outline-primary">Next</a>
+        </div>
+    </div>
+</div>
+
+        <div class="card-body">
+            <table class="table table-bordered calendar-table">
+                <thead>
+                    <tr>
+                        <th>Sun</th>
+                        <th>Mon</th>
+                        <th>Tue</th>
+                        <th>Wed</th>
+                        <th>Thu</th>
+                        <th>Fri</th>
+                        <th>Sat</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        var currentDay = firstDayOfWeek;
+                        while (currentDay <= lastDayOfMonth || currentDay.DayOfWeek != DayOfWeek.Sunday)
+                        {
+                            if (currentDay.DayOfWeek == DayOfWeek.Sunday)
+                            {
+                                @:<tr>
+                            }
+
+                            <td class="calendar-cell @(currentDay.Month == currentDate.Month ? "" : "text-muted")">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span class="date-number">@currentDay.Day</span>
+                                    <div class="add-event-button justify-content-evenly">
+                                        <a asp-action="AddEvent" 
+                                           asp-route-date="@currentDay.ToString("yyyy-MM-dd")"
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-plus"></i>
+                                        </a>
+                                        @{
+                                        var DEvents = Model.Events.Where(e => e.Date.Date == currentDay.Date).ToList();
+                                        if (DEvents.Any())
+                                        {
+                                            foreach (var evt in DEvents)
+                                            {
+                                                <a asp-action="EditEvent"
+                                                   asp-controller="Calendar"
+                                                   asp-route-id="@evt.Id"
+                                                   class="btn btn-sm btn-outline-warning"
+                                                   title="Edit Event">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a asp-action="DeleteEvent" 
+                                                   asp-controller="Calendar"
+                                                   asp-route-id="@evt.Id" 
+                                                   class="btn btn-sm btn-outline-danger"
+                                                   title="Delete Event">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </a>
+                                                break; // Only show one set of buttons
+                                            }
+                                        }
+                                    }
+                                    </div>
+                                </div>
+                                <div class="events-container">
+                                    @{
+                                        var dayEvents = Model.Events.Where(e => e.Date.Date == currentDay.Date).ToList();
+                                        foreach (var evt in dayEvents)
+                                        {
+                                           
+                                           <div class="event-item" 
+                                                 data-bs-toggle="tooltip" 
+                                                 data-bs-html="true"
+                                                 title="Title: @evt.Title, Description: @evt.Description">
+                                                 <h6>@evt.Title</h6>  
+                                                 <p>@evt.Description</p>
+
+                                            </div>
+                                                
+                                        }
+                                    }
+                                </div>
+                            </td>
+
+                            if (currentDay.DayOfWeek == DayOfWeek.Saturday)
+                            {
+                                @:</tr>
+                            }
+                            currentDay = currentDay.AddDays(1);
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+    <div class="card-footer">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <span>Export Current Month:</span>
+            <a asp-action="ExportToExcel" 
+               asp-route-date="@Model.CurrentDate.ToString("yyyy-MM-dd")"
+               class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
+            <a asp-action="ExportToCsv"
+               asp-route-date="@Model.CurrentDate.ToString("yyyy-MM-dd")"
+               class="btn btn-info">
+                <i class="fas fa-file-csv"></i> CSV
+            </a>
+        </div>
+
+        <div class="vr"></div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span>Export Year:</span>
+            <select id="exportYear" name="exportYear" class="form-select" style="width: 120px">
+                @{
+                    int exportYearValue = DateTime.UtcNow.Year;
+                    for (int year = exportYearValue - 5; year <= exportYearValue + 5; year++)
+                    {
+                        if (year == Model.CurrentDate.Year)
+                        {
+                            <option value="@year" selected>@year</option>
+                        }
+                        else
+                        {
+                            <option value="@year">@year</option>
+                        }
+                    }
+                }
+            </select>
+            <a asp-action="ExportYearToExcel" 
+               asp-route-year="@Model.CurrentDate.Year"
+               class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Excel
+            </a>
+            <a asp-action="ExportYearToCsv"
+               asp-route-year="@Model.CurrentDate.Year"
+               class="btn btn-info">
+                <i class="fas fa-file-csv"></i> CSV
+            </a>
+        </div>
+    </div>
+</div>
+</div>
