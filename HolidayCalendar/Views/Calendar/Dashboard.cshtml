@@ -1,0 +1,55 @@
+﻿@* @model DashboardViewModel *@
+@* @{ *@
+@*     ViewData["Title"] = "My Calendars"; *@
+@* } *@
+
+@* <div class="container py-4"> *@
+@*     <div class="d-flex justify-content-between align-items-center mb-4"> *@
+@*         <h2>My Calendars</h2> *@
+@*         <a asp-action="Create" class="btn btn-success">Create New Calendar</a> *@
+@*     </div> *@
+
+@*     <div class="row"> *@
+@*         @foreach (var calendar in Model.Calendars) *@
+@*         { *@
+@*             <div class="col-md-4 mb-4"> *@
+@*                 <div class="card"> *@
+@*                     <div class="card-body"> *@
+@*                         <h5 class="card-title">@calendar.Name</h5> *@
+@*                         <p class="card-text"> *@
+@*                             Events: @calendar.Holidays.Count *@
+@*                         </p> *@
+@*                         <div class="btn-group"> *@
+@*                             <a asp-action="Index" asp-route-id="@calendar.Id"  *@
+@*                                class="btn btn-primary">View</a> *@
+@*                             <button type="button" class="btn btn-info"  *@
+@*                                     data-bs-toggle="modal"  *@
+@*                                     data-bs-target="#shareModal@(calendar.Id)"> *@
+@*                                 Share *@
+@*                             </button> *@
+@*                             <form asp-action="Delete" method="post" class="d-inline"> *@
+@*                                 <input type="hidden" name="id" value="@calendar.Id" /> *@
+@*                                 <button type="submit" class="btn btn-danger"  *@
+@*                                         onclick="return confirm('Are you sure you want to delete this calendar?')"> *@
+@*                                     Delete *@
+@*                                 </button> *@
+@*                             </form> *@
+@*                         </div> *@
+@*                     </div> *@
+@*                 </div> *@
+@*             </div> *@
+
+@*             <!-- Share Modal for each calendar --> *@
+@*             <div class="modal fade" id="shareModal@(calendar.Id)" tabindex="-1"> *@
+@*                 <div class="modal-dialog"> *@
+@*                     <div class="modal-content"> *@
+@*                         <div class="modal-header"> *@
+@*                             <h5 class="modal-title">Share Calendar</h5> *@
+@*                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button> *@
+@*                         </div> *@
+@*                         <div class="modal-body"> *@
+@*                             @if (!string.IsNullOrEmpty(calendar.ShareableLink)) *@
+@*                             { *@
+@*                                 <div class="input-group"> *@
+@*                                     <input type="text" class="form-control"  *@
+@*                                            value=" *@

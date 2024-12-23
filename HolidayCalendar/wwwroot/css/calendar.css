@@ -1,0 +1,157 @@
+﻿/* Calendar Container */
+.calendar-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Calendar Header */
+.calendar-header {
+    margin-bottom: 30px;
+}
+
+.calendar-navigation select {
+    min-width: 120px;
+}
+
+/* Calendar Grid */
+.calendar-grid {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #fff;
+}
+
+    .calendar-grid .row {
+        margin: 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+        .calendar-grid .row:last-child {
+            border-bottom: none;
+        }
+
+/* Column Headers */
+.calendar-header-cell {
+    padding: 10px;
+    font-weight: bold;
+    text-align: center;
+    border-right: 1px solid #dee2e6;
+    flex: 1;
+}
+
+    .calendar-header-cell:last-child {
+        border-right: none;
+    }
+
+/* Calendar Cells */
+.calendar-cell {
+    min-height: 120px;
+    border-right: 1px solid #dee2e6;
+    padding: 10px;
+    position: relative;
+    flex: 1;
+    width: calc(100% / 7);
+}
+
+    .calendar-cell:last-child {
+        border-right: none;
+    }
+
+    .calendar-cell.disabled {
+        background-color: #f8f9fa;
+    }
+
+    .calendar-cell.holiday {
+        background-color: #f8f9fa;
+    }
+
+/* Day Number */
+.day-number {
+    font-size: 1.1em;
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+/* Holiday Styles */
+.holiday-event {
+    background-color: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+}
+
+.holiday-description {
+    font-size: 0.8em;
+    color: white;
+    margin-top: 2px;
+}
+
+/* Add Holiday Button */
+.add-holiday-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    text-decoration: none;
+}
+
+    .add-holiday-btn:hover {
+        background-color: #0056b3;
+    }
+
+/* Calendar Footer */
+.calendar-footer {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+}
+
+.calendar-cell {
+    min-height: 120px;
+}
+
+    .calendar-cell:hover .day-actions {
+        opacity: 1;
+    }
+
+.day-actions {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .calendar-cell {
+        min-height: 100px;
+    }
+
+    .holiday-event {
+        font-size: 0.8em;
+    }
+    .calendar-cell {
+        min-height: 80px;
+    }
+
+    .day-actions {
+        opacity: 1;
+    }
+}

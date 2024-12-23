@@ -1,93 +1,104 @@
-using Calendar.UI.Contexts;
+using HolidayCalendar.src.HolidayCalendar.Core.Entities;
+using HolidayCalendar.src.HolidayCalendar.Core.Interfaces;
+using HolidayCalendar.src.HolidayCalendar.Core.Services;
+using HolidayCalendar.src.HolidayCalendar.Infrastructure.Data;
+using HolidayCalendar.src.HolidayCalendar.Infrastructure.Repositories;
+using HolidayCalendar.src.HolidayCalendar.Infrastructure.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
-namespace Calendar.UI
+namespace HolidayCalendar
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            var builder = WebApplication.CreateBuilder(args);
+
+            builder.Services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+            .EnableSensitiveDataLogging()
+            .EnableDetailedErrors());
+
+            builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
             {
-                ContentRootPath = AppContext.BaseDirectory,
-                Args = args
-            });
+                options.Password.RequireDigit = true;
+                options.Password.RequiredLength = 8;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireLowercase = true;
+            })
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
 
             builder.Logging.ClearProviders();
             builder.Logging.AddConsole();
+            builder.Logging.AddDebug();
+            builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-            var logger = LoggerFactory.Create(config =>
-            {
-                config.AddConsole();
-            }).CreateLogger<Program>();
+            Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(builder.Configuration)
+            .WriteTo.File("logs/holiday-calendar-.txt", rollingInterval: RollingInterval.Day)
+            .CreateLogger();
+
+            builder.Host.UseSerilog();
+
+            builder.Services.AddScoped<ICalendarRepository, CalendarRepository>();
+            builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
+            builder.Services.AddScoped<ICalendarService, CalendarService>();
 
             // Add services to the container.
             builder.Services.AddControllersWithViews();
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                logger.LogError("Connection string 'DefaultConnection' not found!");
-            }
-            else
-            {
-                logger.LogInformation("Connection string found and is not null");
-            }
 
-            builder.Services.AddDbContext<CalendarDbContext>(options =>
-                options.UseNpgsql(connectionString));
+            builder.Services.ConfigureApplicationCookie(options =>
+            {
+                options.LoginPath = "/Account/Login";
+                options.LogoutPath = "/Account/Logout";
+                options.AccessDeniedPath = "/Account/AccessDenied";
+            });
 
             var app = builder.Build();
 
-            var webRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-            if (!Directory.Exists(webRootPath))
-            {
-                Directory.CreateDirectory(webRootPath);
-                logger.LogInformation($"Created wwwroot directory at: {webRootPath}");
-            }
-
-            // Configure the HTTP request pipeline.
-            if (!app.Environment.IsDevelopment())
-            {
-                app.UseExceptionHandler("/Home/Error");
-                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-                app.UseHsts();
-            }
             using (var scope = app.Services.CreateScope())
             {
                 var services = scope.ServiceProvider;
                 try
                 {
-                    var context = services.GetRequiredService<CalendarDbContext>();
-                    context.Database.EnsureCreated();
-
-                    // Log the actual connection string being used (mask sensitive data)
-                    var maskedConnectionString = context.Database.GetConnectionString()
-                        ?.Replace(connectionString ?? "", "[MASKED]");
-                    logger.LogInformation($"Using connection string: {maskedConnectionString}");
-
-                    context.Database.EnsureCreated();
-                    var canConnect = context.Database.CanConnect();
-                    logger.LogInformation($"Database connection test: {canConnect}");
+                    var context = services.GetRequiredService<ApplicationDbContext>();
+                    await DbInitializer.Initialize(context);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "An error occurred while initializing the database.");
+                    var logger = services.GetRequiredService<ILogger<Program>>();
+                    logger.LogError(ex, "An error occurred while seeding the database.");
                 }
             }
 
-            //app.UseHttpsRedirection();
-            app.UseStaticFiles();
+            // Configure the HTTP request pipeline.
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler("/Home/Error");
+                app.UseHsts();
+            }
 
-            app.UseRouting();
+                app.UseHttpsRedirection();
+                app.UseStaticFiles();
 
-            app.UseAuthorization();
+                app.UseRouting();
+
+                app.UseAuthentication();
+                app.UseAuthorization();
 
             app.MapControllerRoute(
-                name: "default",
-                pattern: "{controller=Home}/{action=Index}/{id?}");
+                    name: "default",
+                    pattern: "{controller=Home}/{action=Index}/{id?}");
 
-            app.Run();
+                app.Run();
+            }
         }
     }
-}

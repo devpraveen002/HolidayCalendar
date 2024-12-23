@@ -3,6 +3,15 @@
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <a asp-controller="Calendar" asp-action="Index" class="btn btn-primary">Go to Calendar -></a>
+    <h1 class="display-4">Welcome to Holiday Calendar</h1>
+
+    @if (!User.Identity.IsAuthenticated)
+    {
+        <p>Login to create/edit/share calendar</p>
+    }
+
+    <a asp-controller="Calendar" asp-action="Index" class="btn btn-primary">
+        Go to Calendar
+    </a>
 </div>
+
