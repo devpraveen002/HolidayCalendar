@@ -1,55 +1,85 @@
-﻿@* @model DashboardViewModel *@
-@* @{ *@
-@*     ViewData["Title"] = "My Calendars"; *@
-@* } *@
+﻿@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
 
-@* <div class="container py-4"> *@
-@*     <div class="d-flex justify-content-between align-items-center mb-4"> *@
-@*         <h2>My Calendars</h2> *@
-@*         <a asp-action="Create" class="btn btn-success">Create New Calendar</a> *@
-@*     </div> *@
+<div class="container mt-4">
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
 
-@*     <div class="row"> *@
-@*         @foreach (var calendar in Model.Calendars) *@
-@*         { *@
-@*             <div class="col-md-4 mb-4"> *@
-@*                 <div class="card"> *@
-@*                     <div class="card-body"> *@
-@*                         <h5 class="card-title">@calendar.Name</h5> *@
-@*                         <p class="card-text"> *@
-@*                             Events: @calendar.Holidays.Count *@
-@*                         </p> *@
-@*                         <div class="btn-group"> *@
-@*                             <a asp-action="Index" asp-route-id="@calendar.Id"  *@
-@*                                class="btn btn-primary">View</a> *@
-@*                             <button type="button" class="btn btn-info"  *@
-@*                                     data-bs-toggle="modal"  *@
-@*                                     data-bs-target="#shareModal@(calendar.Id)"> *@
-@*                                 Share *@
-@*                             </button> *@
-@*                             <form asp-action="Delete" method="post" class="d-inline"> *@
-@*                                 <input type="hidden" name="id" value="@calendar.Id" /> *@
-@*                                 <button type="submit" class="btn btn-danger"  *@
-@*                                         onclick="return confirm('Are you sure you want to delete this calendar?')"> *@
-@*                                     Delete *@
-@*                                 </button> *@
-@*                             </form> *@
-@*                         </div> *@
-@*                     </div> *@
-@*                 </div> *@
-@*             </div> *@
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
 
-@*             <!-- Share Modal for each calendar --> *@
-@*             <div class="modal fade" id="shareModal@(calendar.Id)" tabindex="-1"> *@
-@*                 <div class="modal-dialog"> *@
-@*                     <div class="modal-content"> *@
-@*                         <div class="modal-header"> *@
-@*                             <h5 class="modal-title">Share Calendar</h5> *@
-@*                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button> *@
-@*                         </div> *@
-@*                         <div class="modal-body"> *@
-@*                             @if (!string.IsNullOrEmpty(calendar.ShareableLink)) *@
-@*                             { *@
-@*                                 <div class="input-group"> *@
-@*                                     <input type="text" class="form-control"  *@
-@*                                            value=" *@
+    <div class="row mb-4">
+        <div class="col">
+            <h2>My Calendars</h2>
+        </div>
+        <div class="col text-end">
+            <a asp-action="Create" class="btn btn-primary">Create New Calendar</a>
+        </div>
+    </div>
+
+    @if (!Model.Calendars.Any())
+    {
+        <div class="alert alert-info">
+            <p>You don't have any calendars yet. Create one to get started!</p>
+        </div>
+    }
+    else
+    {
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            @foreach (var calendar in Model.Calendars)
+            {
+                <div class="col">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">@calendar.Name</h5>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    @calendar.Holidays.Count holidays
+                                </small>
+                            </p>
+                            @if (calendar.IsDefault)
+                            {
+                                <span class="badge bg-primary mb-2">Default Calendar</span>
+                            }
+                        </div>
+                        <div class="card-footer bg-transparent border-top-0">
+                            <div class="d-flex justify-content-between">
+                                <a asp-action="View" asp-route-id="@calendar.Id"
+                                   class="btn btn-outline-primary btn-sm">View</a>
+                                <a asp-action="Edit" asp-route-id="@calendar.Id"
+                                   class="btn btn-outline-secondary btn-sm">Edit</a>
+                                @if (!calendar.IsDefault)
+                                {
+                                    <form asp-action="Delete" asp-route-id="@calendar.Id"
+                                          method="post" style="display: inline;">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"
+                                                onclick="return confirm('Are you sure you want to delete this calendar?');">
+                                            Delete
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="mt-4">
+        <h3>Share Your Calendar</h3>
+        <p>Select a calendar above to generate a shareable link or invite others to collaborate.</p>
+    </div>
+</div>

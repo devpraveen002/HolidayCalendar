@@ -1,4 +1,4 @@
-﻿@model LoginViewModel
+﻿@model HolidayCalendar.src.HolidayCalendar.Web.ViewModels.LoginViewModel
 @{
     ViewData["Title"] = "Log in";
 }
@@ -10,35 +10,34 @@
                 <div class="card-body">
                     <h2 class="card-title text-center mb-4">@ViewData["Title"]</h2>
                     <form asp-controller="Account" asp-action="Login" asp-route-returnurl="@ViewData["ReturnUrl"]" method="post">
-                        <div asp-validation-summary="All" class="text-danger"></div>
-
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                         <div class="mb-3">
                             <label asp-for="Email" class="form-label"></label>
                             <input asp-for="Email" class="form-control" />
                             <span asp-validation-for="Email" class="text-danger"></span>
                         </div>
-
                         <div class="mb-3">
                             <label asp-for="Password" class="form-label"></label>
                             <input asp-for="Password" class="form-control" />
                             <span asp-validation-for="Password" class="text-danger"></span>
                         </div>
-
                         <div class="mb-3 form-check">
                             <input asp-for="RememberMe" class="form-check-input" />
                             <label asp-for="RememberMe" class="form-check-label"></label>
                         </div>
-
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary">Log in</button>
                         </div>
                     </form>
-
                     <div class="mt-4 text-center">
-                        <p>Don't have an account? <a asp-action="Register">Register here</a></p>
+                        <p>Don't have an account? <a asp-controller="Account" asp-action="Register">Register here</a></p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

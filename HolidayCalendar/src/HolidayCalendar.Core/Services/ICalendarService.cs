@@ -6,10 +6,10 @@ public interface ICalendarService
 {
     Task<Calendar> GetCalendarByIdAsync(int id);
     Task<Calendar> GetDefaultCalendarAsync();
-    Task<Calendar> CreateUserCalendarAsync(string userId);
-    Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday);
-    Task<string> GenerateShareableLinkAsync(int calendarId);
-    Task<Calendar> GetCalendarByShareableLinkAsync(string link);
-    Task<Calendar> CreateCalendarAsync(Calendar calendar);
+    Task<Calendar> GetByShareableLinkAsync(string link);
     Task<IEnumerable<Calendar>> GetUserCalendarsAsync(string userId);
+    Task<Calendar> CreateUserCalendarAsync(string userId, string name);
+    Task<Calendar> UpdateCalendarAsync(Calendar calendar);
+    Task DeleteCalendarAsync(int id);
+    Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday);
 }

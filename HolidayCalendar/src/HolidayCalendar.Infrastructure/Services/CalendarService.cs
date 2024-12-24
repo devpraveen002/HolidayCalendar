@@ -44,69 +44,63 @@ public class CalendarService : ICalendarService
         }
     }
 
-    public async Task<Calendar> CreateUserCalendarAsync(string userId)
+    public async Task<Calendar> CreateUserCalendarAsync(string userId, string name)
     {
         try
         {
             var defaultCalendar = await GetDefaultCalendarAsync();
             var userCalendar = new Calendar
             {
-                Name = "My Calendar",
+                Name = name,
                 UserId = userId,
                 IsDefault = false,
-                ShareableLink = Guid.NewGuid().ToString()
+                ShareableLink = Guid.NewGuid().ToString(),
+                Holidays = defaultCalendar.Holidays.Select(h => new Holiday
+                {
+                    Name = h.Name,
+                    Date = h.Date,
+                    IsFixedHoliday = h.IsFixedHoliday,
+                    IsWeekendAdjustable = h.IsWeekendAdjustable
+                }).ToList()
             };
-
-            userCalendar.Holidays = defaultCalendar.Holidays.Select(h => new Holiday
-            {
-                Name = h.Name,
-                Date = h.Date,
-                IsFixedHoliday = h.IsFixedHoliday,
-                IsWeekendAdjustable = h.IsWeekendAdjustable
-            }).ToList();
 
             return await _calendarRepository.CreateAsync(userCalendar);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating user calendar for user {UserId}", userId);
+            _logger.LogError(ex, "Error creating user calendar for user {UserId} with name {Name}", userId, name);
             throw;
         }
     }
 
-    public async Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday)
+    public async Task<Calendar> UpdateCalendarAsync(Calendar calendar)
     {
         try
         {
-            var calendar = await GetCalendarByIdAsync(calendarId);
-            calendar.Holidays.Add(holiday);
             await _calendarRepository.UpdateAsync(calendar);
             return calendar;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding holiday to calendar {CalendarId}", calendarId);
+            _logger.LogError(ex, "Error updating calendar {CalendarId}", calendar.Id);
             throw;
         }
     }
 
-    public async Task<string> GenerateShareableLinkAsync(int calendarId)
+    public async Task DeleteCalendarAsync(int id)
     {
         try
         {
-            var calendar = await GetCalendarByIdAsync(calendarId);
-            calendar.ShareableLink = Guid.NewGuid().ToString();
-            await _calendarRepository.UpdateAsync(calendar);
-            return calendar.ShareableLink;
+            await _calendarRepository.DeleteAsync(id);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating shareable link for calendar {CalendarId}", calendarId);
+            _logger.LogError(ex, "Error deleting calendar {CalendarId}", id);
             throw;
         }
     }
 
-    public async Task<Calendar> GetCalendarByShareableLinkAsync(string link)
+    public async Task<Calendar> GetByShareableLinkAsync(string link)
     {
         try
         {
@@ -132,27 +126,23 @@ public class CalendarService : ICalendarService
         }
     }
 
-    public async Task<Calendar> CreateCalendarAsync(Calendar calendar)
+    public async Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday)
     {
         try
         {
-            if (calendar.Id == 0)
+            var calendar = await _calendarRepository.GetByIdAsync(calendarId);
+            if (calendar == null)
             {
-                var defaultCalendar = await GetDefaultCalendarAsync();
-                calendar.Holidays = defaultCalendar.Holidays.Select(h => new Holiday
-                {
-                    Name = h.Name,
-                    Date = h.Date,
-                    IsFixedHoliday = h.IsFixedHoliday,
-                    IsWeekendAdjustable = h.IsWeekendAdjustable
-                }).ToList();
+                throw new ArgumentException("Calendar not found", nameof(calendarId));
             }
 
-            return await _calendarRepository.CreateAsync(calendar);
+            calendar.Holidays.Add(holiday);
+            await _calendarRepository.UpdateAsync(calendar);
+            return calendar;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating calendar");
+            _logger.LogError(ex, "Error adding holiday to calendar {CalendarId}", calendarId);
             throw;
         }
     }

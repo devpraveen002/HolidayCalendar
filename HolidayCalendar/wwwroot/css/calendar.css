@@ -155,3 +155,113 @@
         opacity: 1;
     }
 }
+.calendar-grid {
+    width: 100%;
+}
+
+.calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-weight: bold;
+    border-bottom: 1px solid #dee2e6;
+}
+
+    .calendar-header div {
+        padding: 10px;
+    }
+
+.calendar-body {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.calendar-day {
+    position: relative;
+    min-height: 120px;
+    border: 1px solid #dee2e6;
+    padding: 5px;
+}
+
+    .calendar-day.empty {
+        background-color: #f8f9fa;
+    }
+
+.day-number {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+}
+
+.btn-add, .btn-edit, .btn-delete {
+    display: none;
+    background: none;
+    border: none;
+    padding: 2px;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+.calendar-day:hover .btn-add,
+.calendar-day:hover .event-actions {
+    display: block;
+}
+
+.event-indicator {
+    background-color: #007bff;
+    color: white;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-top: 25px;
+    font-size: 0.8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event-actions {
+    display: none;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+.has-events {
+    background-color: #f8f9fa;
+}
+.calendar-week {
+    min-height: 120px;
+}
+
+.calendar-day {
+    padding: 8px;
+    min-height: 120px;
+}
+
+.add-event-btn {
+    display: none;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: white;
+    text-decoration: none;
+}
+
+.calendar-day:hover .add-event-btn {
+    display: block;
+}
+
+.holiday-event {
+    background: #0d6efd;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
