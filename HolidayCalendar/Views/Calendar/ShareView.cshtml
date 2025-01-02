@@ -1,0 +1,102 @@
+﻿@model CalendarViewModel
+@{
+    ViewData["Title"] = $"Shared Calendar - {Model.Calendar.Name}";
+}
+
+<div class="container-fluid py-3">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>@Model.Calendar.Name <span class="badge bg-info">Shared View</span></h2>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body p-2">
+            <!-- Calendar Navigation -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <form asp-action="Share" method="get" class="d-flex gap-2">
+                        <input type="hidden" name="shareableLink" value="@Model.ShareableLink" />
+                        <select name="month" class="form-select w-auto">
+                            @for (int i = 1; i <= 12; i++)
+                            {
+                                <option value="@i" selected="@(i == Model.CurrentMonth)">
+                                    @(new DateTime(2024, i, 1).ToString("MMMM"))
+                                </option>
+                            }
+                        </select>
+                        <select name="year" class="form-select w-auto">
+                            @for (int year = Model.CurrentYear - 5; year <= Model.CurrentYear + 5; year++)
+                            {
+                                <option value="@year" selected="@(year == Model.CurrentYear)">@year</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-primary">Go</button>
+                    </form>
+                </div>
+                <div class="col-md-6 text-end">
+                    <a asp-action="Share" asp-route-shareableLink="@Model.ShareableLink"
+                       asp-route-month="@Model.PreviousMonth" asp-route-year="@Model.PreviousYear"
+                       class="btn btn-outline-primary">Previous</a>
+                    <a asp-action="Share" asp-route-shareableLink="@Model.ShareableLink"
+                       asp-route-month="@Model.NextMonth" asp-route-year="@Model.NextYear"
+                       class="btn btn-outline-primary">Next</a>
+                </div>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="row g-0 text-center fw-bold border-bottom pb-2 mb-2">
+                <div class="col border-end p-2">Sun</div>
+                <div class="col border-end p-2">Mon</div>
+                <div class="col border-end p-2">Tue</div>
+                <div class="col border-end p-2">Wed</div>
+                <div class="col border-end p-2">Thu</div>
+                <div class="col border-end p-2">Fri</div>
+                <div class="col p-2">Sat</div>
+            </div>
+
+            @{
+                var firstDay = new DateTime(Model.CurrentYear, Model.CurrentMonth, 1);
+                var startingDayOfWeek = (int)firstDay.DayOfWeek;
+                var daysInMonth = DateTime.DaysInMonth(Model.CurrentYear, Model.CurrentMonth);
+                var currentWeek = new List<DateTime?>();
+            }
+
+            @for (int i = 0; i < 42; i++)
+            {
+                var dayNumber = i - startingDayOfWeek + 1;
+                var date = dayNumber > 0 && dayNumber <= daysInMonth
+                ? new DateTime(Model.CurrentYear, Model.CurrentMonth, dayNumber)
+                : (DateTime?)null;
+
+                currentWeek.Add(date);
+
+                @if ((i + 1) % 7 == 0)
+                {
+                    <div class="row g-0 border-bottom">
+                        @foreach (var weekDate in currentWeek)
+                        {
+                            var holiday = weekDate.HasValue && Model?.Calendar?.Holidays != null
+                            ? Model.Calendar.Holidays.FirstOrDefault(h => h.Date.Date == weekDate.Value.Date)
+                            : null;
+
+                            <div class="col border-end p-2 @(weekDate.HasValue ? "" : "bg-light")">
+                                @if (weekDate.HasValue)
+                                {
+                                    <div class="fw-bold">@weekDate.Value.Day</div>
+                                    @if (holiday != null)
+                                    {
+                                        <div class="holiday-badge">
+                                            <small class="fw-bold text-primary">@holiday.Name</small>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                    currentWeek.Clear();
+                }
+            }
+        </div>
+    </div>
+</div>

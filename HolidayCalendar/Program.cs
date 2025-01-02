@@ -6,6 +6,7 @@ using HolidayCalendar.src.HolidayCalendar.Infrastructure.Repositories;
 using HolidayCalendar.src.HolidayCalendar.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OfficeOpenXml;
 using Serilog;
 
 namespace HolidayCalendar
@@ -48,6 +49,7 @@ namespace HolidayCalendar
             builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
             builder.Services.AddScoped<ICalendarService, CalendarService>();
 
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             // Add services to the container.
             builder.Services.AddControllersWithViews();
 

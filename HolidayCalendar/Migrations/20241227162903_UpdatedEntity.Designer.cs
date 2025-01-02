@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace HolidayCalendar.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20241223193033_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20241227162903_UpdatedEntity")]
+    partial class UpdatedEntity
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -67,6 +67,9 @@ namespace HolidayCalendar.Migrations
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
 
                     b.Property<bool>("IsFixedHoliday")
                         .HasColumnType("boolean");
@@ -285,7 +288,8 @@ namespace HolidayCalendar.Migrations
                 {
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.User", "User")
                         .WithMany("Calendars")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("User");
                 });

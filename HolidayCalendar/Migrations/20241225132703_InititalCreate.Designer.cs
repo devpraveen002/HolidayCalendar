@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace HolidayCalendar.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20241223211649_UpdatedEntity")]
-    partial class UpdatedEntity
+    [Migration("20241225132703_InititalCreate")]
+    partial class InititalCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -285,7 +285,8 @@ namespace HolidayCalendar.Migrations
                 {
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.User", "User")
                         .WithMany("Calendars")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("User");
                 });

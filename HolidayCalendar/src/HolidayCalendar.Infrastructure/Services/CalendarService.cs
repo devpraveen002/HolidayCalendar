@@ -43,37 +43,36 @@ public class CalendarService : ICalendarService
             throw;
         }
     }
-
-    public async Task<Calendar> CreateUserCalendarAsync(string userId, string name)
-    {
-        try
+        public async Task<Calendar> CreateUserCalendarAsync(string userId, string name)
         {
-            var defaultCalendar = await GetDefaultCalendarAsync();
-            var userCalendar = new Calendar
+            try
             {
-                Name = name,
-                UserId = userId,
-                IsDefault = false,
-                ShareableLink = Guid.NewGuid().ToString(),
-                Holidays = defaultCalendar.Holidays.Select(h => new Holiday
+                var defaultCalendar = await GetDefaultCalendarAsync();
+                var userCalendar = new Calendar
                 {
-                    Name = h.Name,
-                    Date = h.Date,
-                    IsFixedHoliday = h.IsFixedHoliday,
-                    IsWeekendAdjustable = h.IsWeekendAdjustable
-                }).ToList()
-            };
+                    Name = name,
+                    UserId = userId,
+                    IsDefault = false,
+                    ShareableLink = Guid.NewGuid().ToString(),
+                    Holidays = await Task.WhenAll(defaultCalendar.Holidays.Select(async h => new Holiday
+                    {
+                        Name = h.Name,
+                        Date = h.Date,
+                        IsFixedHoliday = h.IsFixedHoliday,
+                        IsWeekendAdjustable = h.IsWeekendAdjustable
+                    }))
+                };
 
-            return await _calendarRepository.CreateAsync(userCalendar);
+                return await _calendarRepository.CreateAsync(userCalendar);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating calendar for user {UserId}", userId);
+                throw;
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating user calendar for user {UserId} with name {Name}", userId, name);
-            throw;
-        }
-    }
 
-    public async Task<Calendar> UpdateCalendarAsync(Calendar calendar)
+        public async Task<Calendar> UpdateCalendarAsync(Calendar calendar)
     {
         try
         {
@@ -126,25 +125,25 @@ public class CalendarService : ICalendarService
         }
     }
 
-    public async Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday)
-    {
-        try
+        public async Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday)
         {
-            var calendar = await _calendarRepository.GetByIdAsync(calendarId);
-            if (calendar == null)
+            try
             {
-                throw new ArgumentException("Calendar not found", nameof(calendarId));
-            }
+                var calendar = await _calendarRepository.GetByIdAsync(calendarId);
+                if (calendar == null)
+                {
+                    throw new ArgumentException("Calendar not found", nameof(calendarId));
+                }
 
-            calendar.Holidays.Add(holiday);
-            await _calendarRepository.UpdateAsync(calendar);
-            return calendar;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error adding holiday to calendar {CalendarId}", calendarId);
-            throw;
+                calendar.Holidays.Add(holiday);
+                await _calendarRepository.UpdateAsync(calendar);
+                return calendar;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding holiday to calendar {CalendarId}", calendarId);
+                throw;
+            }
         }
     }
-}
 

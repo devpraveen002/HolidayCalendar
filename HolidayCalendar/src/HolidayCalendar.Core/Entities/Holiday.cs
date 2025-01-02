@@ -9,4 +9,5 @@ public class Holiday
     public bool IsWeekendAdjustable { get; set; }
     public int CalendarId { get; set; }
     public Calendar Calendar { get; set; }
+    public string? Description { get; internal set; }
 }

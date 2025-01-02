@@ -56,18 +56,48 @@
                         </div>
                         <div class="card-footer bg-transparent border-top-0">
                             <div class="d-flex justify-content-between">
-                                <a asp-action="View" asp-route-id="@calendar.Id"
-                                   class="btn btn-outline-primary btn-sm">View</a>
-                                <a asp-action="Edit" asp-route-id="@calendar.Id"
-                                   class="btn btn-outline-secondary btn-sm">Edit</a>
+                                <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-outline-primary btn-sm">View</a>
+                                <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-outline-secondary btn-sm">Edit</a>
+                                <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#shareModal-@calendar.Id">
+                                    <i class="fas fa-share-alt"></i>
+                                </button>
+
                                 @if (!calendar.IsDefault)
                                 {
-                                    <form asp-action="Delete" asp-route-id="@calendar.Id"
-                                          method="post" style="display: inline;">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm"
-                                                onclick="return confirm('Are you sure you want to delete this calendar?');">
+                                    <form asp-action="Delete" asp-route-id="@calendar.Id" method="post" style="display: inline;">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure?')">
                                             Delete
                                         </button>
+                                    </form>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal fade" id="shareModal-@calendar.Id" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Share "@calendar.Name"</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                @if (!string.IsNullOrEmpty(calendar.ShareableLink))
+                                {
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="@($"{Context.Request.Scheme}://{Context.Request.Host}/Calendar/Share?shareableLink={calendar.ShareableLink}")" readonly>
+                                        <a href="@($"{Context.Request.Scheme}://{Context.Request.Host}/Calendar/Share?shareableLink={calendar.ShareableLink}")"
+                                           class="btn btn-outline-primary" target="_blank">
+                                            <i class="fas fa-external-link-alt"></i> Open
+                                        </a>
+                                    </div>
+                                    <small class="text-muted mt-2 d-block">Click the link to open in a new tab, then copy from your browser's address bar</small>
+                                }
+                                else
+                                {
+                                    <form asp-action="GenerateShareableLink" method="post">
+                                        <input type="hidden" name="calendarId" value="@calendar.Id" />
+                                        <button type="submit" class="btn btn-primary">Generate Shareable Link</button>
                                     </form>
                                 }
                             </div>
@@ -78,8 +108,4 @@
         </div>
     }
 
-    <div class="mt-4">
-        <h3>Share Your Calendar</h3>
-        <p>Select a calendar above to generate a shareable link or invite others to collaborate.</p>
-    </div>
 </div>

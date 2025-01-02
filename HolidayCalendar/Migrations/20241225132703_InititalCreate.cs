@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace HolidayCalendar.Migrations
 {
     /// <inheritdoc />
-    public partial class UpdatedMigration : Migration
+    public partial class InititalCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -166,7 +166,7 @@ namespace HolidayCalendar.Migrations
                     Name = table.Column<string>(type: "text", nullable: false),
                     ShareableLink = table.Column<string>(type: "text", nullable: false),
                     IsDefault = table.Column<bool>(type: "boolean", nullable: false),
-                    UserId = table.Column<string>(type: "text", nullable: false)
+                    UserId = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {

@@ -265,3 +265,7 @@
     border-radius: 4px;
     margin-bottom: 4px;
 }
+.modal .input-group .form-control {
+    word-break: break-all;
+    font-size: 14px;
+}
