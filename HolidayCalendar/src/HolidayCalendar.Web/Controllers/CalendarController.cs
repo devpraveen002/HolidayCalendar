@@ -1,16 +1,28 @@
 ﻿using HolidayCalendar.src.HolidayCalendar.Core.Entities;
 using HolidayCalendar.src.HolidayCalendar.Core.Services;
 using HolidayCalendar.src.HolidayCalendar.Web.ViewModels;
+using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
+using iText.Layout.Properties;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Npgsql.Internal;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection.Metadata;
 using System.Security.Claims;
 using System.Text;
 using LicenseContext = OfficeOpenXml.LicenseContext;
+using ITextDocument = iText.Layout.Document;
+using ITextTable = iText.Layout.Element.Table;
+using ITextParagraph = iText.Layout.Element.Paragraph;
+using iText.IO.Font.Constants;
+using iText.Kernel.Font;
 
 namespace HolidayCalendar.src.HolidayCalendar.Web.Controllers;
 
@@ -354,6 +366,130 @@ public class CalendarController : Controller
             TempData["Error"] = "Failed to export to Excel. Please try again.";
             return RedirectToAction(nameof(Index), new { date });
         }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportToPdf(DateTime date)
+    {
+        try
+        {
+            var calendar = await _calendarService.GetDefaultCalendarAsync();
+            if (calendar == null) return NotFound();
+
+            var events = calendar.Holidays
+                .Where(e => e.Date.Month == date.Month && e.Date.Year == date.Year)
+                .OrderBy(e => e.Date)
+                .ToList();
+
+            byte[] pdfBytes;
+            using (var memoryStream = new MemoryStream())
+            {
+                var writer = new PdfWriter(memoryStream);
+                var pdf = new PdfDocument(writer);
+                var document = new ITextDocument(pdf);
+
+                AddPdfHeader(document, $"Calendar Events - {date:MMMM yyyy}");
+                AddPdfContent(document, events);
+
+                document.Close();
+                pdf.Close();
+                writer.Close();
+
+                pdfBytes = memoryStream.ToArray();
+            }
+
+            return new FileContentResult(pdfBytes, "application/pdf")
+            {
+                FileDownloadName = $"Calendar_Events_{date:MMMM_yyyy}.pdf"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PDF export failed");
+            return BadRequest();
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportYearToPdf(int year)
+    {
+        try
+        {
+            var calendar = await _calendarService.GetDefaultCalendarAsync();
+            if (calendar == null) return NotFound();
+
+            var events = calendar.Holidays
+                .Where(e => e.Date.Year == year)
+                .OrderBy(e => e.Date)
+                .ToList();
+
+            byte[] pdfBytes;
+            using (var memoryStream = new MemoryStream())
+            {
+                var writer = new PdfWriter(memoryStream);
+                var pdf = new PdfDocument(writer);
+                var document = new ITextDocument(pdf);
+
+                AddPdfHeader(document, $"Calendar Events - Year {year}");
+                AddPdfContent(document, events);
+
+                document.Close();
+                pdf.Close();
+                writer.Close();
+
+                pdfBytes = memoryStream.ToArray();
+            }
+
+            return new FileContentResult(pdfBytes, "application/pdf")
+            {
+                FileDownloadName = $"Calendar_Events_{year}.pdf"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PDF export failed for year {Year}", year);
+            return BadRequest();
+        }
+    }
+
+    private void AddPdfHeader(ITextDocument document, string title)
+    {
+        var titleFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+        document.Add(new ITextParagraph(title)
+            .SetFontSize(20)
+            .SetFont(titleFont)
+            .SetTextAlignment(TextAlignment.CENTER));
+    }
+
+    private void AddPdfContent(ITextDocument document, List<Holiday> events)
+    {
+        if (!events.Any())
+        {
+            document.Add(new ITextParagraph("No events found.")
+                .SetTextAlignment(TextAlignment.CENTER));
+            return;
+        }
+
+        var table = new ITextTable(3).UseAllAvailableWidth();
+        var headerFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+        var normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+
+        // Add headers
+        string[] headers = { "Date", "Event", "Description" };
+        foreach (var header in headers)
+        {
+            table.AddHeaderCell(new Cell().Add(new ITextParagraph(header).SetFont(headerFont)));
+        }
+
+        // Add data
+        foreach (var evt in events)
+        {
+            table.AddCell(new Cell().Add(new ITextParagraph(evt.Date.ToString("d")).SetFont(normalFont)));
+            table.AddCell(new Cell().Add(new ITextParagraph(evt.Name).SetFont(normalFont)));
+            table.AddCell(new Cell().Add(new ITextParagraph(evt.Description ?? "").SetFont(normalFont)));
+        }
+
+        document.Add(table);
     }
 
     public async Task<IActionResult> ExportToCsv(DateTime date)

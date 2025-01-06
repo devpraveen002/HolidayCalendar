@@ -5,6 +5,7 @@ using HolidayCalendar.src.HolidayCalendar.Infrastructure.Data;
 using HolidayCalendar.src.HolidayCalendar.Infrastructure.Repositories;
 using HolidayCalendar.src.HolidayCalendar.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 using Serilog;
@@ -89,16 +90,23 @@ namespace HolidayCalendar
             }
 
                 app.UseHttpsRedirection();
-                app.UseStaticFiles();
+            //app.UseStaticFiles();
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                ContentTypeProvider = new FileExtensionContentTypeProvider
+                {
+                    Mappings = { [".pdf"] = "application/pdf" }
+                }
+            });
 
-                app.UseRouting();
+            app.UseRouting();
 
                 app.UseAuthentication();
                 app.UseAuthorization();
 
             app.MapControllerRoute(
                     name: "default",
-                    pattern: "{controller=Home}/{action=Index}/{id?}");
+                    pattern: "{controller=Calendar}/{action=Index}/{id?}");
 
                 app.Run();
             }

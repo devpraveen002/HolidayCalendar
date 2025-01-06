@@ -14,4 +14,5 @@ public class CalendarViewModel
     public int PreviousYear { get; set; }
     public int NextMonth { get; set; }
     public int NextYear { get; set; }
+    public int SelectedYear { get; set; }
 }

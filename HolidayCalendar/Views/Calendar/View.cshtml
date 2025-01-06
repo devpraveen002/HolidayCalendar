@@ -129,6 +129,11 @@
                        class="btn btn-outline-success">
                         <i class="fas fa-file-excel"></i> Excel
                     </a>
+                    <a asp-action="ExportToPdf" asp-route-id="@Model.Calendar.Id"
+                       asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))"
+                       class="btn btn-outline-danger">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </a>
                     <a asp-action="ExportToCsv" asp-route-id="@Model.Calendar.Id"
                        asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))"
                        class="btn btn-outline-info">
@@ -154,6 +159,10 @@
                     <a asp-action="ExportYearToExcel" asp-route-id="@Model.Calendar.Id"
                        asp-route-year="@Model.CurrentYear" class="btn btn-outline-success">
                         <i class="fas fa-file-excel"></i> Excel
+                    </a>
+                    <a asp-action="ExportYearToPdf" asp-route-id="@Model.Calendar.Id"
+                       asp-route-year="@Model.CurrentYear" class="btn btn-outline-danger">
+                        <i class="fas fa-file-pdf"></i> PDF
                     </a>
                     <a asp-action="ExportYearToCsv" asp-route-id="@Model.Calendar.Id"
                        asp-route-year="@Model.CurrentYear" class="btn btn-outline-info">

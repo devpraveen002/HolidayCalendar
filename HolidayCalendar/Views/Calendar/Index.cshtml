@@ -118,38 +118,50 @@
                     <div class="d-flex justify-content-between align-items-center gap-3">
                         <div class="d-flex align-items-center gap-2">
                             <span>Export Current Month:</span>
-                            <a asp-action="ExportToExcel" asp-route-date="@(new DateTime(currentYear, currentMonth, 1))" class="btn btn-outline-success">
-                                <i class="fas fa-file-excel"></i> Excel
-                            </a>
-                            <a asp-action="ExportToCsv" asp-route-date="@(new DateTime(currentYear, currentMonth, 1))" class="btn btn-outline-info">
-                                <i class="fas fa-file-csv"></i> CSV
-                            </a>
-                            <a asp-action="ExportToIcs" asp-route-date="@(new DateTime(currentYear, currentMonth, 1))" class="btn btn-outline-warning">
-                                <i class="fas fa-calendar"></i> ICS
-                            </a>
+                            <form method="get" class="d-flex align-items-center gap-2">
+                                <input type="hidden" name="date" value="@(new DateTime(currentYear, currentMonth, 1).ToString("yyyy-MM-dd"))" />
+
+                                <button type="submit" formaction="@Url.Action("ExportToExcel")" class="btn btn-outline-success">
+                                    <i class="fas fa-file-excel"></i> Excel
+                                </button>
+
+                                <button type="submit" formaction="@Url.Action("ExportToPdf")" class="btn btn-outline-danger">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </button>
+
+                                <button type="submit" formaction="@Url.Action("ExportToCsv")" class="btn btn-outline-info">
+                                    <i class="fas fa-file-csv"></i> CSV
+                                </button>
+
+                                <button type="submit" formaction="@Url.Action("ExportToIcs")" class="btn btn-outline-warning">
+                                    <i class="fas fa-calendar"></i> ICS
+                                </button>
+                            </form>
                         </div>
-
                         <div class="vr"></div>
-
                         <div class="d-flex align-items-center gap-2">
                             <span>Export Year:</span>
-                            <select id="exportYear" name="exportYear" class="form-select" style="width: 120px">
-                                @for (int year = currentYear - 5; year <= currentYear + 5; year++)
-                                {
-                                    <option value="@year" selected="@(year == currentYear)">@year</option>
-                                }
-                            </select>
-                            <a asp-action="ExportYearToExcel" asp-route-year="@currentYear" class="btn btn-outline-success">
-                                <i class="fas fa-file-excel"></i> Excel
-                            </a>
-                            <a asp-action="ExportYearToCsv" asp-route-year="@currentYear" class="btn btn-outline-info">
-                                <i class="fas fa-file-csv"></i> CSV
-                            </a>
-                            <a asp-action="ExportYearToIcs" asp-route-year="@currentYear" class="btn btn-outline-warning">
-                                <i class="fas fa-calendar"></i> ICS
-                            </a>
+                            <form method="get" class="d-flex align-items-center gap-2">
+                                <select name="year" class="form-select" style="width: 120px">
+                                    @for (int year = currentYear - 5; year <= currentYear + 5; year++)
+                                    {
+                                        <option value="@year">@year</option>
+                                    }
+                                </select>
+                                <button type="submit" formaction="@Url.Action("ExportYearToExcel")" class="btn btn-outline-success">
+                                    <i class="fas fa-file-excel"></i> Excel
+                                </button>
+                                <button type="submit" formaction="@Url.Action("ExportYearToPdf")" class="btn btn-outline-danger">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </button>
+                                <button type="submit" formaction="@Url.Action("ExportYearToCsv")" class="btn btn-outline-info">
+                                    <i class="fas fa-file-csv"></i> CSV
+                                </button>
+                                <button type="submit" formaction="@Url.Action("ExportYearToIcs")" class="btn btn-outline-warning">
+                                    <i class="fas fa-calendar"></i> ICS
+                                </button>
+                            </form>
                         </div>
-
                         @if (Model?.IsEditable == true)
                         {
                             <div class="vr"></div>
