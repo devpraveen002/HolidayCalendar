@@ -1,15 +1,16 @@
-﻿using HolidayCalendar.src.HolidayCalendar.Core.Entities;
+﻿using HolidayCalendar.src.HolidayCalendar.Core.DTOs;
+using HolidayCalendar.src.HolidayCalendar.Core.Entities;
 
 namespace HolidayCalendar.src.HolidayCalendar.Core.Services;
 
 public interface ICalendarService
 {
-    Task<Calendar> GetCalendarByIdAsync(int id);
-    Task<Calendar> GetDefaultCalendarAsync();
-    Task<Calendar> GetByShareableLinkAsync(string link);
-    Task<IEnumerable<Calendar>> GetUserCalendarsAsync(string userId);
-    Task<Calendar> CreateUserCalendarAsync(string userId, string name);
-    Task<Calendar> UpdateCalendarAsync(Calendar calendar);
-    Task DeleteCalendarAsync(int id);
-    Task<Calendar> AddHolidayAsync(int calendarId, Holiday holiday);
+    Task<CalendarDto> GetCalendarByIdAsync(Guid id);
+    Task<CalendarDto> GetDefaultCalendarAsync();
+    Task<CalendarDto> GetByShareableLinkAsync(string link);
+    Task<IEnumerable<CalendarDto>> GetUserCalendarsAsync(string userId);
+    Task<CalendarDto> CreateUserCalendarAsync(string userId, string name);
+    Task<CalendarDto> UpdateCalendarAsync(Calendar calendar);
+    Task DeleteCalendarAsync(Guid id);
+    Task<CalendarDto> AddHolidayAsync(Guid calendarId, Holiday holiday);
 }

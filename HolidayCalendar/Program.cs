@@ -23,7 +23,7 @@ namespace HolidayCalendar
             .EnableSensitiveDataLogging()
             .EnableDetailedErrors());
 
-            builder.Services.AddIdentity<User, IdentityRole>(options =>
+            builder.Services.AddIdentity<User, IdentityRole<long>>(options =>
             {
                 options.Password.RequireDigit = true;
                 options.Password.RequiredLength = 8;
@@ -49,6 +49,9 @@ namespace HolidayCalendar
             builder.Services.AddScoped<ICalendarRepository, CalendarRepository>();
             builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
             builder.Services.AddScoped<ICalendarService, CalendarService>();
+            builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
+            builder.Services.AddScoped<ICalendarHolidayRepository, CalendarHolidayRepository>();
+            builder.Services.AddScoped<ICalendarService, CalendarService>();
 
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             // Add services to the container.
@@ -69,7 +72,7 @@ namespace HolidayCalendar
                 try
                 {
                     var context = services.GetRequiredService<ApplicationDbContext>();
-                    await DbInitializer.Initialize(context);
+                    await DbInitializer.Initialize(context, services);
                 }
                 catch (Exception ex)
                 {

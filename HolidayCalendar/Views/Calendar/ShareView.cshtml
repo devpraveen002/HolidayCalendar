@@ -76,8 +76,8 @@
                     <div class="row g-0 border-bottom">
                         @foreach (var weekDate in currentWeek)
                         {
-                            var holiday = weekDate.HasValue && Model?.Calendar?.Holidays != null
-                            ? Model.Calendar.Holidays.FirstOrDefault(h => h.Date.Date == weekDate.Value.Date)
+                            var holiday = weekDate.HasValue
+                            ? Model.Holidays.FirstOrDefault(h => h.Date.Date == weekDate.Value.Date)
                             : null;
 
                             <div class="col border-end p-2 @(weekDate.HasValue ? "" : "bg-light")">

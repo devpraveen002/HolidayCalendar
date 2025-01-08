@@ -2,6 +2,7 @@
 using HolidayCalendar.src.HolidayCalendar.Core.Interfaces;
 using HolidayCalendar.src.HolidayCalendar.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace HolidayCalendar.src.HolidayCalendar.Infrastructure.Repositories;
 
@@ -16,14 +17,17 @@ public class CalendarRepository : ICalendarRepository
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<Calendar> GetByIdAsync(int id)
+    public async Task<IDbContextTransaction> BeginTransactionAsync()
+    {
+        return await _context.Database.BeginTransactionAsync();
+    }
+
+    public async Task<Calendar> GetByIdAsync(Guid id)
     {
         try
         {
-            var calendar = await _context.Calendars
-                .Include(c => c.Holidays)
+            return await _context.Calendars
                 .FirstOrDefaultAsync(c => c.Id == id);
-            return calendar;
         }
         catch (Exception ex)
         {
@@ -37,7 +41,6 @@ public class CalendarRepository : ICalendarRepository
         try
         {
             var calendar = await _context.Calendars
-                .Include(c => c.Holidays)
                 .FirstOrDefaultAsync(c => c.IsDefault);
 
             if (calendar == null)
@@ -58,10 +61,8 @@ public class CalendarRepository : ICalendarRepository
     {
         try
         {
-            var calendar = await _context.Calendars
-                .Include(c => c.Holidays)
+            return await _context.Calendars
                 .FirstOrDefaultAsync(c => c.ShareableLink == link);
-            return calendar;
         }
         catch (Exception ex)
         {
@@ -99,7 +100,7 @@ public class CalendarRepository : ICalendarRepository
         }
     }
 
-    public async Task DeleteAsync(int id)
+    public async Task DeleteAsync(Guid id)
     {
         try
         {
@@ -116,74 +117,19 @@ public class CalendarRepository : ICalendarRepository
             throw;
         }
     }
-    public async Task<IEnumerable<Calendar>> GetUserCalendarsAsync(string userId)
-    {
-        return await _context.Calendars
-            .Include(c => c.Holidays)
-            .Where(c => c.UserId == userId && !c.IsDefault)
-            .ToListAsync();
-    }
 
-    public async Task<Calendar> CreateCalendarAsync(Calendar calendar)
-    {
-        _context.Calendars.Add(calendar);
-        await _context.SaveChangesAsync();
-        return calendar;
-    }
-
-    public async Task<Calendar> CreateUserCalendarAsync(string userId, string name)
+    public async Task<IEnumerable<Calendar>> GetUserCalendarsAsync(long userId)
     {
         try
         {
-            var defaultCalendar = await GetDefaultCalendarAsync();
-            var userCalendar = new Calendar
-            {
-                Name = name,
-                UserId = userId,
-                IsDefault = false,
-                ShareableLink = Guid.NewGuid().ToString(),
-                Holidays = defaultCalendar.Holidays.Select(h => new Holiday
-                {
-                    Name = h.Name,
-                    Date = h.Date,
-                    IsFixedHoliday = h.IsFixedHoliday,
-                    IsWeekendAdjustable = h.IsWeekendAdjustable
-                }).ToList()
-            };
-
-            // Change this line from _calendarRepository.CreateAsync to CreateAsync
-            return await CreateAsync(userCalendar);
+            return await _context.UserCalendars
+                .Where(uc => uc.UserId == userId)
+                .Select(uc => uc.Calendar)
+                .ToListAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating user calendar for user {UserId} with name {Name}", userId, name);
-            throw;
-        }
-    }
-
-    public async Task<Calendar> UpdateCalendarAsync(Calendar calendar)
-    {
-        try
-        {
-            await UpdateAsync(calendar);
-            return calendar;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating calendar {CalendarId}", calendar.Id);
-            throw;
-        }
-    }
-
-    public async Task DeleteCalendarAsync(int id)
-    {
-        try
-        {
-            await DeleteAsync(id);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting calendar {CalendarId}", id);
+            _logger.LogError(ex, "Error getting user calendars");
             throw;
         }
     }

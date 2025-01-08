@@ -5,24 +5,24 @@
 namespace HolidayCalendar.Migrations
 {
     /// <inheritdoc />
-    public partial class UpdatedEntity : Migration
+    public partial class UpdatedEndDate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "Description",
-                table: "Holidays",
-                type: "text",
-                nullable: true);
+            migrationBuilder.RenameColumn(
+                name: "TestDate",
+                table: "Events",
+                newName: "EndDate");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Description",
-                table: "Holidays");
+            migrationBuilder.RenameColumn(
+                name: "EndDate",
+                table: "Events",
+                newName: "TestDate");
         }
     }
 }

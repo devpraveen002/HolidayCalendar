@@ -23,6 +23,7 @@ using ITextTable = iText.Layout.Element.Table;
 using ITextParagraph = iText.Layout.Element.Paragraph;
 using iText.IO.Font.Constants;
 using iText.Kernel.Font;
+using HolidayCalendar.src.HolidayCalendar.Core.DTOs;
 
 namespace HolidayCalendar.src.HolidayCalendar.Web.Controllers;
 
@@ -43,51 +44,39 @@ public class CalendarController : Controller
     {
         try
         {
-            // Default to current month and year if not specified
             var currentDate = DateTime.Now;
             var currentMonth = month ?? currentDate.Month;
             var currentYear = year ?? currentDate.Year;
 
-            // Calculate previous and next months
-            var previousDate = new DateTime(currentYear, currentMonth, 1).AddMonths(-1);
-            var nextDate = new DateTime(currentYear, currentMonth, 1).AddMonths(1);
-
-            Calendar calendar;
+            CalendarDto calendarDto;
             if (!string.IsNullOrEmpty(shareableLink))
             {
-                calendar = await _calendarService.GetByShareableLinkAsync(shareableLink);
+                calendarDto = await _calendarService.GetByShareableLinkAsync(shareableLink);
             }
             else
             {
-                calendar = await _calendarService.GetDefaultCalendarAsync();
+                calendarDto = await _calendarService.GetDefaultCalendarAsync();
             }
 
-            if (calendar == null)
+            if (calendarDto == null)
             {
                 TempData["ErrorMessage"] = "Calendar not found. Please ensure the database is properly seeded.";
                 return RedirectToAction("Error", "Home");
             }
 
-            var viewModel = new CalendarViewModel
-            {
-                Calendar = calendar,
-                IsEditable = User.Identity.IsAuthenticated &&
-                            calendar.UserId == User.FindFirstValue(ClaimTypes.NameIdentifier),
-                CurrentMonth = currentMonth,
-                CurrentYear = currentYear,
-                PreviousMonth = previousDate.Month,
-                PreviousYear = previousDate.Year,
-                NextMonth = nextDate.Month,
-                NextYear = nextDate.Year,
-                ShareableLink = shareableLink
-            };
+            var viewModel = CalendarViewModel.FromDto(calendarDto,
+                User.Identity.IsAuthenticated && calendarDto.Calendar.CreatedBy.ToString() == User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            viewModel.CurrentMonth = currentMonth;
+            viewModel.CurrentYear = currentYear;
+            viewModel.ShareableLink = shareableLink;
 
             return View(viewModel);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving calendar");
-            TempData["ErrorMessage"] = "An error occurred while retrieving the calendar. Please try again later.";
+            TempData["ErrorMessage"] = "An error occurred while retrieving the calendar.";
             return RedirectToAction("Error", "Home");
         }
     }
@@ -103,10 +92,13 @@ public class CalendarController : Controller
 
             var holiday = new Holiday
             {
+                Id = Guid.NewGuid(),
                 Name = model.Name,
                 Date = model.Date,
                 IsFixedHoliday = model.IsFixedHoliday,
-                IsWeekendAdjustable = model.IsWeekendAdjustable
+                IsWeekendAdjustable = model.IsWeekendAdjustable,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))
             };
 
             await _calendarService.AddHolidayAsync(model.CalendarId, holiday);
@@ -163,23 +155,19 @@ public class CalendarController : Controller
 
     [Authorize]
     [HttpGet]
-    public async Task<IActionResult> Edit(int id)
+    public async Task<IActionResult> Edit(Guid id)
     {
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var calendar = await _calendarService.GetCalendarByIdAsync(id);
+            var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
 
-            if (calendar == null || calendar.UserId != userId)
+            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
             {
                 return NotFound();
             }
 
-            var viewModel = new CalendarViewModel
-            {
-                Calendar = calendar
-            };
-
+            var viewModel = CalendarViewModel.FromDto(calendarDto, true);
             return View(viewModel);
         }
         catch (Exception ex)
@@ -190,46 +178,21 @@ public class CalendarController : Controller
         }
     }
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, string name)
-    {
-        try
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var calendar = await _calendarService.GetCalendarByIdAsync(id);
-
-            if (calendar == null || calendar.UserId != userId)
-                return NotFound();
-
-            calendar.Name = name;
-            await _calendarService.UpdateCalendarAsync(calendar);
-            TempData["Success"] = "Calendar updated successfully!";
-            return RedirectToAction(nameof(Dashboard));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating calendar");
-            TempData["Error"] = "An error occurred while updating the calendar.";
-            return RedirectToAction(nameof(Dashboard));
-        }
-    }
-
     [Authorize]
     [HttpPost]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(Guid id)
     {
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var calendar = await _calendarService.GetCalendarByIdAsync(id);
+            var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
 
-            if (calendar == null || calendar.UserId != userId)
+            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
             {
                 return NotFound();
             }
 
-            if (calendar.IsDefault)
+            if (calendarDto.Calendar.IsDefault)
             {
                 TempData["Error"] = "Cannot delete the default calendar.";
                 return RedirectToAction(nameof(Dashboard));
@@ -261,33 +224,36 @@ public class CalendarController : Controller
             var calendars = await _calendarService.GetUserCalendarsAsync(userId);
             var viewModel = new DashboardViewModel
             {
-                Calendars = calendars ?? new List<Calendar>()
+                Calendars = calendars.Select(c => new CalendarSummaryViewModel
+                {
+                    Id = c.Calendar.Id,
+                    Name = c.Calendar.Name,
+                    IsDefault = c.Calendar.IsDefault,
+                    ShareableLink = c.ShareableLink,
+                    HolidayCount = c.Holidays?.Count ?? 0
+                }).ToList()
             };
 
             return View(viewModel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading dashboard for user {UserId}: {Error}",
-                User.FindFirstValue(ClaimTypes.NameIdentifier), ex.Message);
+            _logger.LogError(ex, "Error loading dashboard for user {UserId}", User.FindFirstValue(ClaimTypes.NameIdentifier));
             TempData["Error"] = "An error occurred while loading your calendars.";
             return RedirectToAction("Error", "Home");
         }
     }
 
-    public async Task<IActionResult> View(int id, int? month = null, int? year = null)
+    public async Task<IActionResult> View(Guid id, int? month = null, int? year = null)
     {
-        var calendar = await _calendarService.GetCalendarByIdAsync(id);
-        if (calendar == null) return NotFound();
+        var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+        if (calendarDto == null) return NotFound();
 
         var currentDate = DateTime.Now;
-        var viewModel = new CalendarViewModel
-        {
-            Calendar = calendar,
-            CurrentMonth = month ?? currentDate.Month,
-            CurrentYear = year ?? currentDate.Year,
-            IsEditable = true
-        };
+        var viewModel = CalendarViewModel.FromDto(calendarDto, true);
+
+        viewModel.CurrentMonth = month ?? currentDate.Month;
+        viewModel.CurrentYear = year ?? currentDate.Year;
 
         var currentMonth = new DateTime(viewModel.CurrentYear, viewModel.CurrentMonth, 1);
         viewModel.PreviousMonth = currentMonth.AddMonths(-1).Month;
@@ -300,17 +266,19 @@ public class CalendarController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddHolidayEvent(int calendarId, string name, DateTime date, bool isFixedHoliday, bool isWeekendAdjustable)
+    public async Task<IActionResult> AddHolidayEvent(Guid calendarId, string name, DateTime date, bool isFixedHoliday, bool isWeekendAdjustable)
     {
         try
         {
             var holiday = new Holiday
             {
+                Id = Guid.NewGuid(),
                 Name = name,
                 Date = date.ToUniversalTime(),
                 IsFixedHoliday = isFixedHoliday,
                 IsWeekendAdjustable = isWeekendAdjustable,
-                CalendarId = calendarId
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))
             };
 
             await _calendarService.AddHolidayAsync(calendarId, holiday);
@@ -332,8 +300,8 @@ public class CalendarController : Controller
             var firstDayOfMonth = new DateTime(date.Year, date.Month, 1, 0, 0, 0, DateTimeKind.Utc);
             var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
 
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            var events = calendar.Holidays
+            var calendarDto = await _calendarService.GetDefaultCalendarAsync();
+            var events = calendarDto.Holidays
                 .Where(e => e.Date >= firstDayOfMonth && e.Date <= lastDayOfMonth)
                 .OrderBy(e => e.Date)
                 .ToList();
@@ -343,14 +311,8 @@ public class CalendarController : Controller
             using (var package = new ExcelPackage())
             {
                 var worksheet = package.Workbook.Worksheets.Add("Events");
-
-                // Configure headers with styling
                 ConfigureExcelHeaders(worksheet);
-
-                // Add data rows
                 AddExcelData(worksheet, events);
-
-                // Auto-fit and format
                 worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
 
                 return File(
@@ -373,10 +335,10 @@ public class CalendarController : Controller
     {
         try
         {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            if (calendar == null) return NotFound();
+            var calendarDto = await _calendarService.GetDefaultCalendarAsync();
+            if (calendarDto == null) return NotFound();
 
-            var events = calendar.Holidays
+            var events = calendarDto.Holidays
                 .Where(e => e.Date.Month == date.Month && e.Date.Year == date.Year)
                 .OrderBy(e => e.Date)
                 .ToList();
@@ -496,16 +458,13 @@ public class CalendarController : Controller
     {
         try
         {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            var events = GetEventsForPeriod(calendar, date, true);
+            var calendarDto = await _calendarService.GetDefaultCalendarAsync();
+            var events = GetEventsForPeriod(calendarDto, date, true);
 
             using var memoryStream = new MemoryStream();
             using var writer = new StreamWriter(memoryStream);
 
-            // Add UTF-8 BOM for Excel compatibility
             WriteUtf8Bom(memoryStream);
-
-            // Write CSV content
             await WriteCsvContent(writer, events);
 
             return File(
@@ -546,7 +505,7 @@ public class CalendarController : Controller
     }
 
     #region Helper Methods
-    private IEnumerable<Holiday> GetEventsForPeriod(Calendar calendar, DateTime date, bool isMonthly)
+    private IEnumerable<Holiday> GetEventsForPeriod(CalendarDto calendarDto, DateTime date, bool isMonthly)
     {
         var firstDay = isMonthly
             ? new DateTime(date.Year, date.Month, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -556,7 +515,7 @@ public class CalendarController : Controller
             ? firstDay.AddMonths(1).AddDays(-1)
             : new DateTime(date.Year, 12, 31, 23, 59, 59, DateTimeKind.Utc);
 
-        return calendar.Holidays
+        return calendarDto.Holidays
             .Where(e => e.Date >= firstDay && e.Date <= lastDay)
             .OrderBy(e => e.Date);
     }
@@ -729,18 +688,15 @@ public class CalendarController : Controller
     [AllowAnonymous]
     public async Task<IActionResult> Share(string shareableLink, int? month = null, int? year = null)
     {
-        var calendar = await _calendarService.GetByShareableLinkAsync(shareableLink);
-        if (calendar == null) return NotFound();
+        var calendarDto = await _calendarService.GetByShareableLinkAsync(shareableLink);
+        if (calendarDto == null) return NotFound();
 
         var currentDate = DateTime.Now;
-        var viewModel = new CalendarViewModel
-        {
-            Calendar = calendar,
-            CurrentMonth = month ?? currentDate.Month,
-            CurrentYear = year ?? currentDate.Year,
-            IsEditable = false,
-            ShareableLink = shareableLink
-        };
+        var viewModel = CalendarViewModel.FromDto(calendarDto, false);
+
+        viewModel.CurrentMonth = month ?? currentDate.Month;
+        viewModel.CurrentYear = year ?? currentDate.Year;
+        viewModel.ShareableLink = shareableLink;
 
         var currentMonth = new DateTime(viewModel.CurrentYear, viewModel.CurrentMonth, 1);
         viewModel.PreviousMonth = currentMonth.AddMonths(-1).Month;
@@ -751,17 +707,17 @@ public class CalendarController : Controller
         return View("View", viewModel);
     }
 
-    public async Task<IActionResult> GenerateShareableLink(int calendarId)
+    public async Task<IActionResult> GenerateShareableLink(Guid calendarId)
     {
         try
         {
-            var calendar = await _calendarService.GetCalendarByIdAsync(calendarId);
-            if (calendar == null || calendar.UserId != User.FindFirstValue(ClaimTypes.NameIdentifier))
+            var calendarDto = await _calendarService.GetCalendarByIdAsync(calendarId);
+            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != User.FindFirstValue(ClaimTypes.NameIdentifier))
                 return NotFound();
 
             var shareableLink = Guid.NewGuid().ToString();
-            calendar.ShareableLink = shareableLink;
-            await _calendarService.UpdateCalendarAsync(calendar);
+            calendarDto.Calendar.ShareableLink = shareableLink;
+            await _calendarService.UpdateCalendarAsync(calendarDto.Calendar);
 
             TempData["ShareableLink"] = $"{Request.Scheme}://{Request.Host}/Calendar/Share?shareableLink={shareableLink}";
             TempData["Success"] = "Shareable link generated successfully!";

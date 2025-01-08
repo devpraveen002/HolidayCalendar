@@ -1,9 +1,8 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿namespace HolidayCalendar.src.HolidayCalendar.Core.Entities;
 
-namespace HolidayCalendar.src.HolidayCalendar.Core.Entities;
-
-public class User : IdentityUser<long>
+public abstract class BaseEntity
 {
+    public Guid Id { get; set; }
     public DateTime CreatedAt { get; set; }
     public long CreatedBy { get; set; }
     public DateTime? ModifiedAt { get; set; }

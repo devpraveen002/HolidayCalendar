@@ -12,5 +12,7 @@ public class AddHolidayViewModel
 
     public bool IsFixedHoliday { get; set; }
     public bool IsWeekendAdjustable { get; set; }
-    public int CalendarId { get; set; }
+
+    [Required]
+    public Guid CalendarId { get; set; }
 }
