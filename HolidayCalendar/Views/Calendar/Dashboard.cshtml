@@ -1,4 +1,4 @@
-﻿@model DashboardViewModel
+﻿@* @model DashboardViewModel
 @{
     ViewData["Title"] = "My Calendars";
 }
@@ -95,4 +95,45 @@
             You don't have any calendars yet. <a asp-action="Create">Create your first calendar</a>.
         </div>
     }
+</div> *@
+
+@model DashboardViewModel
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center">
+        <h1 class="text-center">Admin Dashboard</h1>
+        <div>
+            <a asp-action="CreateCountryCalendar" class="btn btn-primary">Create Country Calendar</a>
+            <a asp-action="Create" class="btn btn-secondary">Create New Calendar</a>
+        </div>
+    </div>
+
+    <table class="table table-bordered table-striped mt-4">
+        <thead class="table-dark">
+            <tr>
+                <th>Name</th>
+                <th>Country</th>
+                <th>Holidays</th>
+                <th>Default</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var calendar in Model.Calendars)
+            {
+                <tr>
+                    <td>@calendar.Name</td>
+                    <td>@calendar.CountryCode</td>
+                    <td>@calendar.HolidayCount</td>
+                    <td>@(calendar.IsDefault ? "Yes" : "No")</td>
+                    <td>
+                        <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-primary btn-sm">View</a>
+                        <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-warning btn-sm mx-1">Edit</a>
+                        <a asp-action="Delete" asp-route-id="@calendar.Id" class="btn btn-danger btn-sm">Delete</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
 </div>
+

@@ -269,3 +269,11 @@
     word-break: break-all;
     font-size: 14px;
 }
+
+.admin-tools {
+    display: none;
+}
+
+td:hover .admin-tools {
+    display: inline;
+}

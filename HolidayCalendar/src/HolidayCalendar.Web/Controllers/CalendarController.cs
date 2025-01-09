@@ -23,7 +23,7 @@ public class CalendarController : Controller
     }
 
     [AllowAnonymous]
-    public async Task<IActionResult> Index(string countryCode = "US", int? month = null, int? year = null)
+    public async Task<IActionResult> Index(string SelectedCountry = "US", int? month = null, int? year = null)
     {
         try
         {
@@ -31,52 +31,49 @@ public class CalendarController : Controller
             var currentMonth = month ?? currentDate.Month;
             var currentYear = year ?? currentDate.Year;
 
-            // Fetch calendar and countries concurrently
-            var calendarTask = _calendarService.GetDefaultCalendarByCountryAsync(countryCode);
-            var countriesTask = _calendarService.GetDefaultCalendarCountriesAsync();
-
-            var calendarDto = await calendarTask;
-
+            var calendarDto = await _calendarService.GetDefaultCalendarByCountryAsync(SelectedCountry);
             if (calendarDto == null)
             {
-                _logger.LogWarning("No calendar found for country code: {CountryCode}", countryCode);
+                _logger.LogWarning("No calendar found for country code: {CountryCode}", SelectedCountry);
                 TempData["Error"] = "Calendar not found for the selected country.";
                 return RedirectToAction("Error", "Home");
             }
 
-            var countries = await countriesTask;
+            var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
 
-            // Create view model
+            var events = await _calendarService.GetEventsByCalendarIdAsync(calendarDto.Calendar.Id);
+
             var viewModel = new CalendarViewModel
             {
                 Calendar = calendarDto.Calendar,
                 Holidays = calendarDto.Holidays ?? new List<Holiday>(),
-                Events = await _calendarService.GetEventsByCalendarIdAsync(calendarDto.Calendar.Id),
+                Events = events ?? new List<Event>(),
                 CurrentMonth = currentMonth,
                 CurrentYear = currentYear,
-                SelectedCountry = countryCode,
+                SelectedCountry = SelectedCountry,
                 IsEditable = User.Identity.IsAuthenticated && User.IsInRole("Admin"),
                 ShareableLink = calendarDto.ShareableLink,
-                AvailableCountries = countries?.Select(c => new SelectListItem
+                AvailableCountries = countries.Select(c => new SelectListItem
                 {
                     Value = c.CountryCode,
                     Text = c.CountryName,
-                    Selected = c.CountryCode == countryCode
-                }).ToList() ?? new List<SelectListItem>()
+                    Selected = c.CountryCode == SelectedCountry
+                }).ToList()
             };
 
-            // Set navigation dates
             viewModel.UpdateNavigationDates();
 
             return View(viewModel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading calendar for country code: {CountryCode}", countryCode);
+            _logger.LogError(ex, "Error loading calendar for country code: {SelectedCountry}", SelectedCountry);
             TempData["Error"] = "An error occurred while loading the calendar.";
             return RedirectToAction("Error", "Home");
         }
     }
+
+
 
 
     [Authorize(Roles = "Admin")]

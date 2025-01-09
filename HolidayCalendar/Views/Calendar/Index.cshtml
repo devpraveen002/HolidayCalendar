@@ -1,4 +1,4 @@
-﻿@model CalendarViewModel
+﻿@* @model CalendarViewModel
 @{
     ViewData["Title"] = "Calendar";
 }
@@ -150,4 +150,124 @@
 {
     <partial name="_AddEventModal" model="Model" />
     <partial name="_EditHolidayModal" model="Model" />
-}
+} *@
+
+@model CalendarViewModel
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-center">@Model.Calendar.Name</h1>
+        <a asp-action="Create" class="btn btn-primary">
+            <i class="fa fa-plus"></i> Create New Calendar
+        </a>
+    </div>
+
+    <!-- Country Selection -->
+    <form asp-action="Index" method="get" class="d-flex mb-4">
+        <label for="countryDropdown" class="me-2 align-self-center">Switch Country:</label>
+        <select id="countryDropdown" asp-for="SelectedCountry" asp-items="Model.AvailableCountries" class="form-select me-2 w-auto"></select>
+        <button type="submit" class="btn btn-secondary">
+            <i class="fa fa-globe"></i> Go
+        </button>
+    </form>
+
+    <!-- Calendar -->
+    <div class="table-responsive">
+        <table class="table table-bordered text-center">
+            <thead>
+                <tr class="table-secondary">
+                    <th>Sun</th>
+                    <th>Mon</th>
+                    <th>Tue</th>
+                    <th>Wed</th>
+                    <th>Thu</th>
+                    <th>Fri</th>
+                    <th>Sat</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var week = 0; week < 6; week++)
+                {
+                    <tr>
+                        @for (var day = 0; day < 7; day++)
+                        {
+                            var currentDay = week * 7 + day - (int)new DateTime(Model.CurrentYear, Model.CurrentMonth, 1).DayOfWeek + 1;
+                            var date = new DateTime(Model.CurrentYear, Model.CurrentMonth, 1).AddDays(currentDay - 1);
+
+                            if (currentDay < 1 || currentDay > DateTime.DaysInMonth(Model.CurrentYear, Model.CurrentMonth))
+                            {
+                                <td class="bg-light"></td>
+                            }
+                            else
+                            {
+                                var holidays = Model.Holidays.Where(h => h.Date.Date == date.Date).ToList();
+                                <td class="position-relative">
+                                    <strong>@date.Day</strong>
+                                    @if (holidays.Any())
+                                    {
+                                        <ul class="list-unstyled text-start mt-2">
+                                            @foreach (var holiday in holidays)
+                                            {
+                                                <li>@holiday.Name</li>
+                                            }
+                                        </ul>
+                                    }
+                                    @if (Model.IsEditable)
+                                    {
+                                        <div class="admin-tools position-absolute bottom-0 end-0 p-1 d-none">
+                                            <a asp-action="AddHolidayEvent" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@date" class="text-success">
+                                                <i class="fa fa-plus"></i>
+                                            </a>
+                                            <a asp-action="EditHolidayEvent" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@date" class="text-warning ms-2">
+                                                <i class="fa fa-edit"></i>
+                                            </a>
+                                            <a asp-action="DeleteHolidayEvent" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@date" class="text-danger ms-2">
+                                                <i class="fa fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    }
+                                </td>
+                            }
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Export Options -->
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <div>
+            <h5>Export Current Month</h5>
+            <a asp-action="ExportToExcel" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))" class="btn btn-outline-success">
+                <i class="fa fa-file-excel"></i> Excel
+            </a>
+            <a asp-action="ExportToPdf" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))" class="btn btn-outline-danger">
+                <i class="fa fa-file-pdf"></i> PDF
+            </a>
+            <a asp-action="ExportToCsv" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))" class="btn btn-outline-primary">
+                <i class="fa fa-file-csv"></i> CSV
+            </a>
+            <a asp-action="ExportToIcs" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))" class="btn btn-outline-secondary">
+                <i class="fa fa-calendar"></i> ICS
+            </a>
+        </div>
+        <div>
+            <h5>Select Year</h5>
+            <form asp-action="Index" method="get">
+                <div class="d-flex">
+                    <select id="yearDropdown" name="year" class="form-select w-auto me-2">
+                        @for (int i = DateTime.Now.Year - 5; i <= DateTime.Now.Year + 5; i++)
+                        {
+                            <option value="@i" selected="@(i == Model.CurrentYear ? "selected" : null)">@i</option>
+                        }
+                    </select>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-file-export"></i> Export Year
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

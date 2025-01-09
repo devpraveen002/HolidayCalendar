@@ -1,4 +1,4 @@
-﻿@model CalendarViewModel
+﻿@* @model CalendarViewModel
 @{
     ViewData["Title"] = $"Shared Calendar - {Model.Calendar.Name}";
 }
@@ -140,4 +140,20 @@
             </form>
         </div>
     </div>
+</div> *@
+
+@model CalendarViewModel
+
+<div class="container py-5">
+    <h1 class="text-center">@Model.Calendar.Name (Shared View)</h1>
+
+    <h3 class="my-4">Holidays</h3>
+    <ul class="list-group">
+        @foreach (var holiday in Model.Holidays)
+        {
+            <li class="list-group-item">
+                <strong>@holiday.Name</strong> - @holiday.Date.ToShortDateString()
+            </li>
+        }
+    </ul>
 </div>
