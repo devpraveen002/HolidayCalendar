@@ -7,4 +7,5 @@ public class CalendarSummaryViewModel
     public bool IsDefault { get; set; }
     public string ShareableLink { get; set; }
     public int HolidayCount { get; set; }
+    public string CountryCode { get; set; }
 }

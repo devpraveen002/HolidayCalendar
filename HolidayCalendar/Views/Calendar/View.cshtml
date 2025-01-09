@@ -88,6 +88,11 @@
                             ? Model.Holidays.FirstOrDefault(h => h.Date.Date == weekDate.Value.Date)
                             : null;
 
+                            var events = weekDate.HasValue
+                            ? Model.Events.Where(e => e.StartDate.Date <= weekDate.Value.Date &&
+                            e.EndDate.Date >= weekDate.Value.Date)
+                            : null;
+
                             <div class="col border-end position-relative calendar-day @(weekDate.HasValue ? "" : "bg-light")">
                                 @if (weekDate.HasValue)
                                 {
@@ -95,16 +100,25 @@
                                     @if (holiday != null)
                                     {
                                         <div class="holiday-event">
-                                            <div class="small fw-bold">@holiday.Name</div>
+                                            <div class="small fw-bold text-danger">@holiday.Name</div>
                                         </div>
                                     }
-                                    @if (Model?.IsEditable == true && string.IsNullOrEmpty(Model.ShareableLink))
+                                    @if (events != null && events.Any())
+                                    {
+                                        foreach (var evt in events)
+                                        {
+                                            <div class="custom-event">
+                                                <div class="small fw-bold text-primary">@evt.Name</div>
+                                            </div>
+                                        }
+                                    }
+                                    @if (Model.IsEditable && string.IsNullOrEmpty(Model.ShareableLink))
                                     {
                                         <button type="button"
                                                 class="add-event-btn"
                                                 data-bs-toggle="modal"
-                                                data-bs-target="#addHolidayModal"
-                                                onclick="document.getElementById('eventDate').value='@weekDate.Value.ToString("yyyy-MM-dd")'">
+                                                data-bs-target="#addEventModal"
+                                                data-date="@weekDate.Value.ToString("yyyy-MM-dd")">
                                             +
                                         </button>
                                     }

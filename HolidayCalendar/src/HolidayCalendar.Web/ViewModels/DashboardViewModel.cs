@@ -4,9 +4,10 @@ namespace HolidayCalendar.src.HolidayCalendar.Web.ViewModels;
 
 public class DashboardViewModel
 {
-    public ICollection<CalendarSummaryViewModel> Calendars { get; set; } = new List<CalendarSummaryViewModel>();
+    public List<CalendarSummaryViewModel> Calendars { get; set; } = new List<CalendarSummaryViewModel>();
+    public bool IsAdmin { get; set; }
 
-    public static DashboardViewModel FromDto(IEnumerable<CalendarDto> calendars)
+    public static DashboardViewModel FromDto(IEnumerable<CalendarDto> calendars, bool isAdmin)
     {
         return new DashboardViewModel
         {
@@ -16,8 +17,10 @@ public class DashboardViewModel
                 Name = c.Calendar.Name,
                 IsDefault = c.Calendar.IsDefault,
                 ShareableLink = c.ShareableLink,
-                HolidayCount = c.Holidays?.Count ?? 0
-            }).ToList()
+                HolidayCount = c.Holidays?.Count ?? 0,
+                CountryCode = c.Calendar.CountryCode
+            }).ToList(),
+            IsAdmin = isAdmin
         };
     }
 }

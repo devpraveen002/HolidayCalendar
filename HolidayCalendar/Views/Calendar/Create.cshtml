@@ -1,5 +1,4 @@
-﻿@* Views/Calendar/Create.cshtml *@
-@model HolidayCalendar.src.HolidayCalendar.Web.ViewModels.CreateCalendarViewModel
+﻿@* @model HolidayCalendar.src.HolidayCalendar.Web.ViewModels.CreateCalendarViewModel
 
 @{
     ViewData["Title"] = "Create New Calendar";
@@ -33,4 +32,52 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+} *@
+@model CreateCalendarViewModel
+@{
+    ViewData["Title"] = "Create New Calendar";
 }
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h2 class="card-title mb-4">Create New Calendar</h2>
+                    <form asp-action="Create" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="Name" class="form-label"></label>
+                            <input asp-for="Name" class="form-control" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="CountryCode" class="form-label"></label>
+                            <select asp-for="CountryCode" class="form-select" asp-items="Model.AvailableCountries"></select>
+                            <span asp-validation-for="CountryCode" class="text-danger"></span>
+                        </div>
+
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <div class="mb-3 form-check">
+                                <input asp-for="IsDefault" class="form-check-input" />
+                                <label asp-for="IsDefault" class="form-check-label"></label>
+                            </div>
+                        }
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Create Calendar</button>
+                            <a asp-action="Dashboard" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+} 

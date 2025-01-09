@@ -1,29 +1,11 @@
 ﻿using HolidayCalendar.src.HolidayCalendar.Core.Entities;
 using HolidayCalendar.src.HolidayCalendar.Core.Services;
 using HolidayCalendar.src.HolidayCalendar.Web.ViewModels;
-using iText.Kernel.Pdf;
-using iText.Layout;
-using iText.Layout.Element;
-using iText.Layout.Properties;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Npgsql.Internal;
-using OfficeOpenXml;
-using OfficeOpenXml.Style;
-using System.ComponentModel;
 using System.Diagnostics;
-using System.Reflection.Metadata;
 using System.Security.Claims;
-using System.Text;
-using LicenseContext = OfficeOpenXml.LicenseContext;
-using ITextDocument = iText.Layout.Document;
-using ITextTable = iText.Layout.Element.Table;
-using ITextParagraph = iText.Layout.Element.Paragraph;
-using iText.IO.Font.Constants;
-using iText.Kernel.Font;
-using HolidayCalendar.src.HolidayCalendar.Core.DTOs;
 
 namespace HolidayCalendar.src.HolidayCalendar.Web.Controllers;
 
@@ -40,7 +22,8 @@ public class CalendarController : Controller
         _logger = logger;
     }
 
-    public async Task<IActionResult> Index(string shareableLink = null, int? month = null, int? year = null)
+    [AllowAnonymous]
+    public async Task<IActionResult> Index(string countryCode = "US", int? month = null, int? year = null)
     {
         try
         {
@@ -48,38 +31,93 @@ public class CalendarController : Controller
             var currentMonth = month ?? currentDate.Month;
             var currentYear = year ?? currentDate.Year;
 
-            CalendarDto calendarDto;
-            if (!string.IsNullOrEmpty(shareableLink))
-            {
-                calendarDto = await _calendarService.GetByShareableLinkAsync(shareableLink);
-            }
-            else
-            {
-                calendarDto = await _calendarService.GetDefaultCalendarAsync();
-            }
+            // Fetch calendar and countries concurrently
+            var calendarTask = _calendarService.GetDefaultCalendarByCountryAsync(countryCode);
+            var countriesTask = _calendarService.GetDefaultCalendarCountriesAsync();
+
+            var calendarDto = await calendarTask;
 
             if (calendarDto == null)
             {
-                TempData["ErrorMessage"] = "Calendar not found. Please ensure the database is properly seeded.";
+                _logger.LogWarning("No calendar found for country code: {CountryCode}", countryCode);
+                TempData["Error"] = "Calendar not found for the selected country.";
                 return RedirectToAction("Error", "Home");
             }
 
-            var viewModel = CalendarViewModel.FromDto(calendarDto,
-                User.Identity.IsAuthenticated && calendarDto.Calendar.CreatedBy.ToString() == User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var countries = await countriesTask;
 
-            viewModel.CurrentMonth = currentMonth;
-            viewModel.CurrentYear = currentYear;
-            viewModel.ShareableLink = shareableLink;
+            // Create view model
+            var viewModel = new CalendarViewModel
+            {
+                Calendar = calendarDto.Calendar,
+                Holidays = calendarDto.Holidays ?? new List<Holiday>(),
+                Events = await _calendarService.GetEventsByCalendarIdAsync(calendarDto.Calendar.Id),
+                CurrentMonth = currentMonth,
+                CurrentYear = currentYear,
+                SelectedCountry = countryCode,
+                IsEditable = User.Identity.IsAuthenticated && User.IsInRole("Admin"),
+                ShareableLink = calendarDto.ShareableLink,
+                AvailableCountries = countries?.Select(c => new SelectListItem
+                {
+                    Value = c.CountryCode,
+                    Text = c.CountryName,
+                    Selected = c.CountryCode == countryCode
+                }).ToList() ?? new List<SelectListItem>()
+            };
+
+            // Set navigation dates
+            viewModel.UpdateNavigationDates();
 
             return View(viewModel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving calendar");
-            TempData["ErrorMessage"] = "An error occurred while retrieving the calendar.";
+            _logger.LogError(ex, "Error loading calendar for country code: {CountryCode}", countryCode);
+            TempData["Error"] = "An error occurred while loading the calendar.";
             return RedirectToAction("Error", "Home");
         }
     }
+
+
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AdminDashboard()
+    {
+        var calendars = await _calendarService.GetAllCalendarsAsync();
+        return View(calendars);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost]
+    public async Task<IActionResult> CreateCountryCalendar(CreateCalendarViewModel model)
+    {
+        if (ModelState.IsValid)
+        {
+            await _calendarService.CreateDefaultCalendarAsync(model);
+            return RedirectToAction(nameof(AdminDashboard));
+        }
+        return View(model);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost]
+    public async Task<IActionResult> EditEvent(EditEventViewModel model)
+    {
+        if (ModelState.IsValid)
+        {
+            await _calendarService.UpdateEventAsync(model.CalendarId, model.Event);
+            return RedirectToAction(nameof(AdminDashboard));
+        }
+        return View(model);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost]
+    public async Task<IActionResult> DeleteEvent(Guid eventId, Guid calendarId)
+    {
+        await _calendarService.DeleteEventAsync(calendarId, eventId);
+        return RedirectToAction(nameof(AdminDashboard));
+    }
+
 
     [HttpPost]
     [Authorize]
@@ -113,9 +151,18 @@ public class CalendarController : Controller
 
     [Authorize]
     [HttpGet]
-    public IActionResult Create()
+    public async Task<IActionResult> Create()
     {
-        return View(new CreateCalendarViewModel());
+        var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
+        var viewModel = new CreateCalendarViewModel
+        {
+            AvailableCountries = countries.Select(c => new SelectListItem
+            {
+                Value = c.CountryCode,
+                Text = c.CountryName
+            })
+        };
+        return View(viewModel);
     }
 
     [Authorize]
@@ -135,11 +182,19 @@ public class CalendarController : Controller
                 return RedirectToAction("Login", "Account");
             }
 
-            var newCalendar = await _calendarService.CreateUserCalendarAsync(userId, model.Name);
-            if (newCalendar == null)
+            // Check if user is admin
+            bool isAdmin = User.IsInRole("Admin");
+
+            if (isAdmin && model.IsDefault)
             {
-                TempData["Error"] = "Unable to create calendar. Please try again.";
-                return RedirectToAction(nameof(Dashboard));
+                // Admin creating a default calendar
+                model.CreatedBy = long.Parse(userId);
+                await _calendarService.CreateDefaultCalendarAsync(model);
+            }
+            else
+            {
+                // Regular user creating their calendar
+                await _calendarService.CreateUserCalendarAsync(userId, model.Name);
             }
 
             TempData["Success"] = "Calendar created successfully!";
@@ -230,9 +285,26 @@ public class CalendarController : Controller
                     Name = c.Calendar.Name,
                     IsDefault = c.Calendar.IsDefault,
                     ShareableLink = c.ShareableLink,
-                    HolidayCount = c.Holidays?.Count ?? 0
-                }).ToList()
+                    HolidayCount = c.Holidays?.Count ?? 0,
+                    CountryCode = c.Calendar.CountryCode // Add this line
+                }).ToList(),
+                IsAdmin = User.IsInRole("Admin") // Add this line
             };
+
+            // If user is admin, add all default calendars
+            if (viewModel.IsAdmin)
+            {
+                var defaultCalendars = await _calendarService.GetAllDefaultCalendarsAsync();
+                viewModel.Calendars.AddRange(defaultCalendars.Select(c => new CalendarSummaryViewModel
+                {
+                    Id = c.Calendar.Id,
+                    Name = c.Calendar.Name,
+                    IsDefault = true,
+                    ShareableLink = c.ShareableLink,
+                    HolidayCount = c.Holidays?.Count ?? 0,
+                    CountryCode = c.Calendar.CountryCode
+                }));
+            }
 
             return View(viewModel);
         }
@@ -244,24 +316,69 @@ public class CalendarController : Controller
         }
     }
 
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> CreateUserCalendar(CreateCalendarViewModel model)
+    {
+        if (ModelState.IsValid)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            await _calendarService.CreateUserCalendarAsync(userId, model.Name);
+            return RedirectToAction(nameof(Dashboard));
+        }
+        return View(model);
+    }
+
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> EditUserCalendar(EditCalendarViewModel model)
+    {
+        if (ModelState.IsValid)
+        {
+            await _calendarService.UpdateCalendarAsync(model.Calendar);
+            return RedirectToAction(nameof(Dashboard));
+        }
+        return View(model);
+    }
+
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> DeleteUserCalendar(Guid calendarId)
+    {
+        await _calendarService.DeleteCalendarAsync(calendarId);
+        return RedirectToAction(nameof(Dashboard));
+    }
+
     public async Task<IActionResult> View(Guid id, int? month = null, int? year = null)
     {
-        var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
-        if (calendarDto == null) return NotFound();
+        try
+        {
+            var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+            if (calendarDto == null)
+                return NotFound();
 
-        var currentDate = DateTime.Now;
-        var viewModel = CalendarViewModel.FromDto(calendarDto, true);
+            var currentDate = DateTime.Now;
+            var viewModel = CalendarViewModel.FromDto(calendarDto,
+                User.Identity.IsAuthenticated &&
+                calendarDto.Calendar.CreatedBy.ToString() == User.FindFirstValue(ClaimTypes.NameIdentifier));
 
-        viewModel.CurrentMonth = month ?? currentDate.Month;
-        viewModel.CurrentYear = year ?? currentDate.Year;
+            viewModel.CurrentMonth = month ?? currentDate.Month;
+            viewModel.CurrentYear = year ?? currentDate.Year;
+            viewModel.UpdateNavigationDates();
 
-        var currentMonth = new DateTime(viewModel.CurrentYear, viewModel.CurrentMonth, 1);
-        viewModel.PreviousMonth = currentMonth.AddMonths(-1).Month;
-        viewModel.PreviousYear = currentMonth.AddMonths(-1).Year;
-        viewModel.NextMonth = currentMonth.AddMonths(1).Month;
-        viewModel.NextYear = currentMonth.AddMonths(1).Year;
+            // Get events for the current month
+            var events = await _calendarService.GetEventsByCalendarIdAsync(id);
+            viewModel.Events = events.Where(e =>
+                e.StartDate.Year == viewModel.CurrentYear &&
+                e.StartDate.Month == viewModel.CurrentMonth).ToList();
 
-        return View(viewModel);
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error viewing calendar");
+            return RedirectToAction("Error", "Home");
+        }
     }
 
     [HttpPost]
@@ -293,182 +410,54 @@ public class CalendarController : Controller
         }
     }
 
-    public async Task<IActionResult> ExportToExcel(DateTime date)
+    [HttpGet]
+    public async Task<IActionResult> ExportToExcel(Guid calendarId, DateTime date)
     {
         try
         {
-            var firstDayOfMonth = new DateTime(date.Year, date.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-            var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
-
-            var calendarDto = await _calendarService.GetDefaultCalendarAsync();
-            var events = calendarDto.Holidays
-                .Where(e => e.Date >= firstDayOfMonth && e.Date <= lastDayOfMonth)
-                .OrderBy(e => e.Date)
-                .ToList();
-
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-            using (var package = new ExcelPackage())
-            {
-                var worksheet = package.Workbook.Worksheets.Add("Events");
-                ConfigureExcelHeaders(worksheet);
-                AddExcelData(worksheet, events);
-                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                return File(
-                    package.GetAsByteArray(),
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    $"Calendar_Events_{date:MMMM_yyyy}.xlsx"
-                );
-            }
+            var bytes = await _calendarService.ExportMonthToExcelAsync(calendarId, date);
+            return File(
+                bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"Calendar_Events_{date:MMMM_yyyy}.xlsx"
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error exporting to Excel for date {Date}", date);
             TempData["Error"] = "Failed to export to Excel. Please try again.";
-            return RedirectToAction(nameof(Index), new { date });
+            return RedirectToAction(nameof(Index), new { calendarId, date });
         }
     }
 
     [HttpGet]
-    public async Task<IActionResult> ExportToPdf(DateTime date)
+    public async Task<IActionResult> ExportToPdf(Guid calendarId, DateTime date)
     {
         try
         {
-            var calendarDto = await _calendarService.GetDefaultCalendarAsync();
-            if (calendarDto == null) return NotFound();
-
-            var events = calendarDto.Holidays
-                .Where(e => e.Date.Month == date.Month && e.Date.Year == date.Year)
-                .OrderBy(e => e.Date)
-                .ToList();
-
-            byte[] pdfBytes;
-            using (var memoryStream = new MemoryStream())
-            {
-                var writer = new PdfWriter(memoryStream);
-                var pdf = new PdfDocument(writer);
-                var document = new ITextDocument(pdf);
-
-                AddPdfHeader(document, $"Calendar Events - {date:MMMM yyyy}");
-                AddPdfContent(document, events);
-
-                document.Close();
-                pdf.Close();
-                writer.Close();
-
-                pdfBytes = memoryStream.ToArray();
-            }
-
-            return new FileContentResult(pdfBytes, "application/pdf")
-            {
-                FileDownloadName = $"Calendar_Events_{date:MMMM_yyyy}.pdf"
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PDF export failed");
-            return BadRequest();
-        }
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> ExportYearToPdf(int year)
-    {
-        try
-        {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            if (calendar == null) return NotFound();
-
-            var events = calendar.Holidays
-                .Where(e => e.Date.Year == year)
-                .OrderBy(e => e.Date)
-                .ToList();
-
-            byte[] pdfBytes;
-            using (var memoryStream = new MemoryStream())
-            {
-                var writer = new PdfWriter(memoryStream);
-                var pdf = new PdfDocument(writer);
-                var document = new ITextDocument(pdf);
-
-                AddPdfHeader(document, $"Calendar Events - Year {year}");
-                AddPdfContent(document, events);
-
-                document.Close();
-                pdf.Close();
-                writer.Close();
-
-                pdfBytes = memoryStream.ToArray();
-            }
-
-            return new FileContentResult(pdfBytes, "application/pdf")
-            {
-                FileDownloadName = $"Calendar_Events_{year}.pdf"
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PDF export failed for year {Year}", year);
-            return BadRequest();
-        }
-    }
-
-    private void AddPdfHeader(ITextDocument document, string title)
-    {
-        var titleFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
-        document.Add(new ITextParagraph(title)
-            .SetFontSize(20)
-            .SetFont(titleFont)
-            .SetTextAlignment(TextAlignment.CENTER));
-    }
-
-    private void AddPdfContent(ITextDocument document, List<Holiday> events)
-    {
-        if (!events.Any())
-        {
-            document.Add(new ITextParagraph("No events found.")
-                .SetTextAlignment(TextAlignment.CENTER));
-            return;
-        }
-
-        var table = new ITextTable(3).UseAllAvailableWidth();
-        var headerFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
-        var normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
-
-        // Add headers
-        string[] headers = { "Date", "Event", "Description" };
-        foreach (var header in headers)
-        {
-            table.AddHeaderCell(new Cell().Add(new ITextParagraph(header).SetFont(headerFont)));
-        }
-
-        // Add data
-        foreach (var evt in events)
-        {
-            table.AddCell(new Cell().Add(new ITextParagraph(evt.Date.ToString("d")).SetFont(normalFont)));
-            table.AddCell(new Cell().Add(new ITextParagraph(evt.Name).SetFont(normalFont)));
-            table.AddCell(new Cell().Add(new ITextParagraph(evt.Description ?? "").SetFont(normalFont)));
-        }
-
-        document.Add(table);
-    }
-
-    public async Task<IActionResult> ExportToCsv(DateTime date)
-    {
-        try
-        {
-            var calendarDto = await _calendarService.GetDefaultCalendarAsync();
-            var events = GetEventsForPeriod(calendarDto, date, true);
-
-            using var memoryStream = new MemoryStream();
-            using var writer = new StreamWriter(memoryStream);
-
-            WriteUtf8Bom(memoryStream);
-            await WriteCsvContent(writer, events);
-
+            var bytes = await _calendarService.ExportMonthToPdfAsync(calendarId, date);
             return File(
-                memoryStream.ToArray(),
+                bytes,
+                "application/pdf",
+                $"Calendar_Events_{date:MMMM_yyyy}.pdf"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting to PDF for date {Date}", date);
+            TempData["Error"] = "Failed to export to PDF. Please try again.";
+            return RedirectToAction(nameof(Index), new { calendarId, date });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportToCsv(Guid calendarId, DateTime date)
+    {
+        try
+        {
+            var bytes = await _calendarService.ExportMonthToCsvAsync(calendarId, date);
+            return File(
+                bytes,
                 "application/vnd.ms-excel; charset=utf-8",
                 $"Calendar_Events_{date:MMMM_yyyy}.csv"
             );
@@ -477,211 +466,107 @@ public class CalendarController : Controller
         {
             _logger.LogError(ex, "Error exporting to CSV for date {Date}", date);
             TempData["Error"] = "Failed to export to CSV. Please try again.";
-            return RedirectToAction(nameof(Index), new { date });
+            return RedirectToAction(nameof(Index), new { calendarId, date });
         }
     }
 
-    public async Task<IActionResult> ExportToIcs(DateTime date)
+    [HttpGet]
+    public async Task<IActionResult> ExportToIcs(Guid calendarId, DateTime date)
     {
         try
         {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            var events = GetEventsForPeriod(calendar, date, true);
-
-            var sb = new StringBuilder();
-            WriteIcsHeader(sb);
-            WriteIcsEvents(sb, events);
-            sb.AppendLine("END:VCALENDAR");
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return File(bytes, "text/calendar", $"Calendar_Events_{date:MMMM_yyyy}.ics");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error exporting to ICS");
-            TempData["Error"] = "Failed to export to ICS. Please try again.";
-            return RedirectToAction(nameof(Index), new { date });
-        }
-    }
-
-    #region Helper Methods
-    private IEnumerable<Holiday> GetEventsForPeriod(CalendarDto calendarDto, DateTime date, bool isMonthly)
-    {
-        var firstDay = isMonthly
-            ? new DateTime(date.Year, date.Month, 1, 0, 0, 0, DateTimeKind.Utc)
-            : new DateTime(date.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        var lastDay = isMonthly
-            ? firstDay.AddMonths(1).AddDays(-1)
-            : new DateTime(date.Year, 12, 31, 23, 59, 59, DateTimeKind.Utc);
-
-        return calendarDto.Holidays
-            .Where(e => e.Date >= firstDay && e.Date <= lastDay)
-            .OrderBy(e => e.Date);
-    }
-
-    private void WriteIcsHeader(StringBuilder sb)
-    {
-        sb.AppendLine("BEGIN:VCALENDAR");
-        sb.AppendLine("VERSION:2.0");
-        sb.AppendLine("PRODID:-//YourCompany//Calendar App//EN");
-        sb.AppendLine("CALSCALE:GREGORIAN");
-        sb.AppendLine("METHOD:PUBLISH");
-    }
-
-    private void WriteIcsEvents(StringBuilder sb, IEnumerable<Holiday> events)
-    {
-        foreach (var evt in events)
-        {
-            sb.AppendLine("BEGIN:VEVENT");
-            sb.AppendLine($"UID:{evt.Id}");
-            sb.AppendLine($"DTSTAMP:{DateTime.UtcNow:yyyyMMddTHHmmssZ}");
-            sb.AppendLine($"DTSTART;VALUE=DATE:{evt.Date:yyyyMMdd}");
-            sb.AppendLine($"DTEND;VALUE=DATE:{evt.Date.AddDays(1):yyyyMMdd}");
-            sb.AppendLine($"SUMMARY:{EscapeIcsField(evt.Name)}");
-            sb.AppendLine("END:VEVENT");
-        }
-    }
-
-    private string EscapeIcsField(string field)
-    {
-        if (string.IsNullOrEmpty(field)) return "";
-        return field
-            .Replace("\\", "\\\\")
-            .Replace(";", "\\;")
-            .Replace(",", "\\,")
-            .Replace("\n", "\\n")
-            .Replace("\r", "");
-    }
-
-    private string EscapeCsvField(string field)
-    {
-        if (string.IsNullOrEmpty(field)) return "\"\"";
-        return $"\"{field.Replace("\"", "\"\"")}\"";
-    }
-
-    private void ConfigureExcelHeaders(ExcelWorksheet worksheet)
-    {
-        worksheet.Cells["A1"].Value = "Date";
-        worksheet.Cells["B1"].Value = "Title";
-        worksheet.Cells["C1"].Value = "Description";
-
-        var headerRange = worksheet.Cells["A1:C1"];
-        headerRange.Style.Font.Bold = true;
-        headerRange.Style.Fill.PatternType = ExcelFillStyle.Solid;
-        headerRange.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
-    }
-
-    private void AddExcelData(ExcelWorksheet worksheet, IEnumerable<Holiday> events)
-    {
-        int row = 2;
-        foreach (var evt in events)
-        {
-            worksheet.Cells[row, 1].Value = evt.Date.ToLocalTime().ToString("MM/dd/yyyy");
-            worksheet.Cells[row, 2].Value = evt.Name;
-            worksheet.Cells[row, 3].Value = evt.Description;
-            row++;
-        }
-    }
-
-    private void WriteUtf8Bom(Stream stream)
-    {
-        byte[] bom = new byte[] { 0xEF, 0xBB, 0xBF };
-        stream.Write(bom, 0, bom.Length);
-    }
-
-    private async Task WriteCsvContent(StreamWriter writer, IEnumerable<Holiday> events)
-    {
-        writer.WriteLine("Date,Title,Description");
-        foreach (var evt in events)
-        {
-            var dateStr = $"\"{evt.Date:yyyy-MM-dd}\"";
-            var title = EscapeCsvField(evt.Name);
-            var description = EscapeCsvField(evt.Description ?? "");
-            await writer.WriteLineAsync($"{dateStr},{title},{description}");
-        }
-        await writer.FlushAsync();
-    }
-    #endregion
-
-    public async Task<IActionResult> ExportYearToExcel(int year)
-    {
-        try
-        {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            var events = GetEventsForPeriod(calendar, new DateTime(year, 1, 1), false);
-
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-            using (var package = new ExcelPackage())
-            {
-                var worksheet = package.Workbook.Worksheets.Add($"Events {year}");
-                ConfigureExcelHeaders(worksheet);
-                AddExcelData(worksheet, events);
-                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
-
-                return File(
-                    package.GetAsByteArray(),
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    $"Calendar_Events_{year}.xlsx"
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error exporting year to Excel");
-            TempData["Error"] = "Failed to export year to Excel. Please try again.";
-            return RedirectToAction(nameof(Index), new { year });
-        }
-    }
-
-    public async Task<IActionResult> ExportYearToCsv(int year)
-    {
-        try
-        {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            var events = GetEventsForPeriod(calendar, new DateTime(year, 1, 1), false);
-
-            using var memoryStream = new MemoryStream();
-            using var writer = new StreamWriter(memoryStream);
-
-            WriteUtf8Bom(memoryStream);
-            await WriteCsvContent(writer, events);
-
+            var bytes = await _calendarService.ExportMonthToIcsAsync(calendarId, date);
             return File(
-                memoryStream.ToArray(),
+                bytes,
+                "text/calendar",
+                $"Calendar_Events_{date:MMMM_yyyy}.ics"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting to ICS for date {Date}", date);
+            TempData["Error"] = "Failed to export to ICS. Please try again.";
+            return RedirectToAction(nameof(Index), new { calendarId, date });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportYearToExcel(Guid calendarId, int year)
+    {
+        try
+        {
+            var bytes = await _calendarService.ExportYearToExcelAsync(calendarId, year);
+            return File(
+                bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"Calendar_Events_{year}.xlsx"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting year to Excel {Year}", year);
+            TempData["Error"] = "Failed to export to Excel. Please try again.";
+            return RedirectToAction(nameof(Index), new { calendarId, year });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportYearToPdf(Guid calendarId, int year)
+    {
+        try
+        {
+            var bytes = await _calendarService.ExportYearToPdfAsync(calendarId, year);
+            return File(
+                bytes,
+                "application/pdf",
+                $"Calendar_Events_{year}.pdf"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting year to PDF {Year}", year);
+            TempData["Error"] = "Failed to export to PDF. Please try again.";
+            return RedirectToAction(nameof(Index), new { calendarId, year });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportYearToCsv(Guid calendarId, int year)
+    {
+        try
+        {
+            var bytes = await _calendarService.ExportYearToCsvAsync(calendarId, year);
+            return File(
+                bytes,
                 "application/vnd.ms-excel; charset=utf-8",
                 $"Calendar_Events_{year}.csv"
             );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error exporting year to CSV");
-            TempData["Error"] = "Failed to export year to CSV. Please try again.";
-            return RedirectToAction(nameof(Index), new { year });
+            _logger.LogError(ex, "Error exporting year to CSV {Year}", year);
+            TempData["Error"] = "Failed to export to CSV. Please try again.";
+            return RedirectToAction(nameof(Index), new { calendarId, year });
         }
     }
 
-    public async Task<IActionResult> ExportYearToIcs(int year)
+    [HttpGet]
+    public async Task<IActionResult> ExportYearToIcs(Guid calendarId, int year)
     {
         try
         {
-            var calendar = await _calendarService.GetDefaultCalendarAsync();
-            var events = GetEventsForPeriod(calendar, new DateTime(year, 1, 1), false);
-
-            var sb = new StringBuilder();
-            WriteIcsHeader(sb);
-            WriteIcsEvents(sb, events);
-            sb.AppendLine("END:VCALENDAR");
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return File(bytes, "text/calendar", $"Calendar_Events_{year}.ics");
+            var bytes = await _calendarService.ExportYearToIcsAsync(calendarId, year);
+            return File(
+                bytes,
+                "text/calendar",
+                $"Calendar_Events_{year}.ics"
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error exporting year to ICS");
-            TempData["Error"] = "Failed to export year to ICS. Please try again.";
-            return RedirectToAction(nameof(Index), new { year });
+            _logger.LogError(ex, "Error exporting year to ICS {Year}", year);
+            TempData["Error"] = "Failed to export to ICS. Please try again.";
+            return RedirectToAction(nameof(Index), new { calendarId, year });
         }
     }
 
@@ -707,17 +592,18 @@ public class CalendarController : Controller
         return View("View", viewModel);
     }
 
+    [Authorize]
     public async Task<IActionResult> GenerateShareableLink(Guid calendarId)
     {
         try
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var calendarDto = await _calendarService.GetCalendarByIdAsync(calendarId);
-            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != User.FindFirstValue(ClaimTypes.NameIdentifier))
+
+            if (calendarDto == null || (calendarDto.Calendar.CreatedBy.ToString() != userId && !User.IsInRole("Admin")))
                 return NotFound();
 
-            var shareableLink = Guid.NewGuid().ToString();
-            calendarDto.Calendar.ShareableLink = shareableLink;
-            await _calendarService.UpdateCalendarAsync(calendarDto.Calendar);
+            var shareableLink = await _calendarService.GenerateShareableLinkAsync(calendarId);
 
             TempData["ShareableLink"] = $"{Request.Scheme}://{Request.Host}/Calendar/Share?shareableLink={shareableLink}";
             TempData["Success"] = "Shareable link generated successfully!";
@@ -729,6 +615,25 @@ public class CalendarController : Controller
             TempData["Error"] = "Failed to generate shareable link.";
             return RedirectToAction(nameof(Dashboard));
         }
+    }
+
+    [AllowAnonymous]
+    public async Task<IActionResult> SharedCalendar(string shareableLink)
+    {
+        var calendarDto = await _calendarService.GetByShareableLinkAsync(shareableLink);
+        if (calendarDto == null)
+            return NotFound();
+
+        var viewModel = new CalendarViewModel
+        {
+            Calendar = calendarDto.Calendar,
+            Holidays = calendarDto.Holidays,
+            Events = await _calendarService.GetEventsByCalendarIdAsync(calendarDto.Calendar.Id),
+            IsEditable = false,
+            ShareableLink = shareableLink
+        };
+
+        return View("Index", viewModel);
     }
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

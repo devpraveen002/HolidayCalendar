@@ -28,6 +28,11 @@ namespace HolidayCalendar.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -35,6 +40,13 @@ namespace HolidayCalendar.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("IsDefault");
+
+                    b.Property<bool>("IsDefaultCountryCalendar")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsUserCreated")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("ModifiedAt")
@@ -45,8 +57,8 @@ namespace HolidayCalendar.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("ShareableLink")
                         .IsRequired()
@@ -54,6 +66,10 @@ namespace HolidayCalendar.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Name", "CountryCode")
+                        .IsUnique()
+                        .HasFilter("\"IsDefault\" = true");
 
                     b.ToTable("Calendars");
                 });
@@ -84,12 +100,92 @@ namespace HolidayCalendar.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CalendarId");
+
                     b.HasIndex("HolidayId");
 
-                    b.HasIndex("CalendarId", "HolidayId")
+                    b.ToTable("CalendarHolidays");
+                });
+
+            modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.CalendarShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CalendarId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ShareableLink")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarId");
+
+                    b.HasIndex("ShareableLink")
                         .IsUnique();
 
-                    b.ToTable("CalendarHolidays");
+                    b.ToTable("CalendarShares");
+                });
+
+            modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.Country", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CountryName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Countries");
                 });
 
             modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.Event", b =>
@@ -115,6 +211,9 @@ namespace HolidayCalendar.Migrations
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("EventTypeId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -131,9 +230,81 @@ namespace HolidayCalendar.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CalendarId");
+                    b.HasIndex("EventTypeId");
+
+                    b.HasIndex("CalendarId", "StartDate", "EndDate");
 
                     b.ToTable("Events");
+                });
+
+            modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.EventType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EventTypes");
+                });
+
+            modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.ExportLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CalendarId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ExportDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExportFormat")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExportType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExportedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarId");
+
+                    b.ToTable("ExportLogs");
                 });
 
             modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.Holiday", b =>
@@ -152,8 +323,7 @@ namespace HolidayCalendar.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("IsDefault")
                         .HasColumnType("boolean");
@@ -172,8 +342,7 @@ namespace HolidayCalendar.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -430,13 +599,13 @@ namespace HolidayCalendar.Migrations
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.Calendar", "Calendar")
                         .WithMany()
                         .HasForeignKey("CalendarId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.Holiday", "Holiday")
                         .WithMany()
                         .HasForeignKey("HolidayId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Calendar");
@@ -444,12 +613,42 @@ namespace HolidayCalendar.Migrations
                     b.Navigation("Holiday");
                 });
 
+            modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.CalendarShare", b =>
+                {
+                    b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.Calendar", "Calendar")
+                        .WithMany()
+                        .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Calendar");
+                });
+
             modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.Event", b =>
                 {
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.Calendar", "Calendar")
                         .WithMany()
                         .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.EventType", "EventType")
+                        .WithMany()
+                        .HasForeignKey("EventTypeId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Calendar");
+
+                    b.Navigation("EventType");
+                });
+
+            modelBuilder.Entity("HolidayCalendar.src.HolidayCalendar.Core.Entities.ExportLog", b =>
+                {
+                    b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.Calendar", "Calendar")
+                        .WithMany()
+                        .HasForeignKey("CalendarId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Calendar");
@@ -460,13 +659,13 @@ namespace HolidayCalendar.Migrations
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.Calendar", "Calendar")
                         .WithMany()
                         .HasForeignKey("CalendarId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("HolidayCalendar.src.HolidayCalendar.Core.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Calendar");

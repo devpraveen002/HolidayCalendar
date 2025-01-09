@@ -1,7 +1,7 @@
 ﻿@model CalendarViewModel
-
 @{
     ViewData["Title"] = "Edit Calendar";
+    var isAdmin = User.IsInRole("Admin");
 }
 
 <div class="container mt-4">
@@ -12,10 +12,27 @@
                     <h2 class="card-title">Edit Calendar</h2>
                     <form asp-action="Edit" method="post">
                         <input type="hidden" name="id" value="@Model.Calendar.Id" />
+                        <input type="hidden" name="isDefault" value="@Model.Calendar.IsDefault" />
+
                         <div class="mb-3">
-                            <label class="form-label">Calendar Name</label>
-                            <input type="text" name="name" class="form-control" value="@Model.Calendar.Name" required />
+                            <label asp-for="Calendar.Name" class="form-label">Calendar Name</label>
+                            <input asp-for="Calendar.Name" class="form-control" required />
+                            <span asp-validation-for="Calendar.Name" class="text-danger"></span>
                         </div>
+
+                        @if (isAdmin && Model.Calendar.IsDefault)
+                        {
+                            <div class="mb-3">
+                                <label asp-for="Calendar.CountryCode" class="form-label">Country</label>
+                                <select asp-for="Calendar.CountryCode" class="form-select" asp-items="Model.AvailableCountries"></select>
+                                <span asp-validation-for="Calendar.CountryCode" class="text-danger"></span>
+                            </div>
+                        }
+                        else
+                        {
+                            <input type="hidden" asp-for="Calendar.CountryCode" />
+                        }
+
                         <div class="d-flex justify-content-between">
                             <a asp-action="Dashboard" class="btn btn-secondary">Back</a>
                             <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -26,7 +43,3 @@
         </div>
     </div>
 </div>
-
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}

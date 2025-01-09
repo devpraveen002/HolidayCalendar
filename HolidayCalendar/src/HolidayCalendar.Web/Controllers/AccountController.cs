@@ -2,7 +2,6 @@
 using HolidayCalendar.src.HolidayCalendar.Web.ViewModels;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using System;
 
 namespace HolidayCalendar.src.HolidayCalendar.Web.Controllers;
 

@@ -1,5 +1,4 @@
 ﻿using HolidayCalendar.src.HolidayCalendar.Core.Entities;
-using HolidayCalendar.src.HolidayCalendar.Infrastructure.Data.Configrations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -14,23 +13,21 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<long>, 
         : base(options)
     {
     }
+
     public DbSet<Calendar> Calendars { get; set; }
     public DbSet<Holiday> Holidays { get; set; }
     public DbSet<UserCalendar> UserCalendars { get; set; }
     public DbSet<CalendarHoliday> CalendarHolidays { get; set; }
     public DbSet<Event> Events { get; set; }
+    public DbSet<Country> Countries { get; set; }
+    public DbSet<ExportLog> ExportLogs { get; set; }
+    public DbSet<CalendarShare> CalendarShares { get; set; }
+    public DbSet<EventType> EventTypes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
-        
-        //builder.ApplyConfiguration(new UserConfiguration());
-        //builder.ApplyConfiguration(new CalendarConfiguration());
-        //builder.ApplyConfiguration(new EventConfiguration());
-        
-
-        // Configure Identity tables
         builder.Entity<User>().ToTable("Users");
         builder.Entity<IdentityRole<long>>().ToTable("Roles");
         builder.Entity<IdentityUserRole<long>>().ToTable("UserRoles");
@@ -39,108 +36,76 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<long>, 
         builder.Entity<IdentityRoleClaim<long>>().ToTable("RoleClaims");
         builder.Entity<IdentityUserToken<long>>().ToTable("UserTokens");
 
-        // Configure Calendar
-        builder.Entity<Calendar>(entity =>
+        builder.Entity<Calendar>()
+            .Property(c => c.IsDefault)
+            .HasColumnName("IsDefault");
+
+        builder.Entity<Calendar>()
+            .HasIndex(c => new { c.Name, c.CountryCode })
+            .IsUnique()
+            .HasFilter("\"IsDefault\" = true");
+
+        builder.Entity<CalendarHoliday>()
+            .HasOne(ch => ch.Calendar)
+            .WithMany()
+            .HasForeignKey(ch => ch.CalendarId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<CalendarHoliday>()
+            .HasOne(ch => ch.Holiday)
+            .WithMany()
+            .HasForeignKey(ch => ch.HolidayId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<UserCalendar>()
+            .HasIndex(uc => new { uc.UserId, uc.CalendarId })
+            .IsUnique();
+
+        builder.Entity<Event>()
+            .HasIndex(e => new { e.CalendarId, e.StartDate, e.EndDate });
+
+        builder.Entity<CalendarShare>()
+            .HasIndex(e => e.ShareableLink).IsUnique();
+
+        builder.Entity<Event>()
+            .HasOne(e => e.EventType)
+            .WithMany()
+            .HasForeignKey(e => e.EventTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        foreach (var property in builder.Model.GetEntityTypes()
+            .SelectMany(t => t.GetProperties())
+            .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?)))
         {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).ValueGeneratedOnAdd();
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.ShareableLink).HasMaxLength(100);
+            property.SetColumnType("timestamp with time zone");
+        }
+    }
 
-            // Audit properties configuration
-            entity.Property(e => e.CreatedAt).IsRequired();
-            entity.Property(e => e.CreatedBy).IsRequired();
-        });
+    public override int SaveChanges()
+    {
+        HandleDateTimeConversion();
+        return base.SaveChanges();
+    }
 
-        // Configure Holiday
-        builder.Entity<Holiday>(entity =>
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        HandleDateTimeConversion();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void HandleDateTimeConversion()
+    {
+        foreach (var entry in ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
         {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).ValueGeneratedOnAdd();
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Description).HasMaxLength(500);
-            entity.Property(e => e.Date).IsRequired();
-
-            // Audit properties configuration
-            entity.Property(e => e.CreatedAt).IsRequired();
-            entity.Property(e => e.CreatedBy).IsRequired();
-        });
-
-        // Configure UserCalendar
-        builder.Entity<UserCalendar>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).ValueGeneratedOnAdd();
-
-            // Relationships
-            entity.HasOne(uc => uc.User)
-                .WithMany()
-                .HasForeignKey(uc => uc.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(uc => uc.Calendar)
-                .WithMany()
-                .HasForeignKey(uc => uc.CalendarId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Create unique index on UserId and CalendarId
-            entity.HasIndex(uc => new { uc.UserId, uc.CalendarId }).IsUnique();
-
-            // Audit properties configuration
-            entity.Property(e => e.CreatedAt).IsRequired();
-            entity.Property(e => e.CreatedBy).IsRequired();
-        });
-
-        // Configure CalendarHoliday
-        builder.Entity<CalendarHoliday>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).ValueGeneratedOnAdd();
-
-            // Relationships
-            entity.HasOne(ch => ch.Calendar)
-                .WithMany()
-                .HasForeignKey(ch => ch.CalendarId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(ch => ch.Holiday)
-                .WithMany()
-                .HasForeignKey(ch => ch.HolidayId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Create unique index on CalendarId and HolidayId
-            entity.HasIndex(ch => new { ch.CalendarId, ch.HolidayId }).IsUnique();
-
-            // Audit properties configuration
-            entity.Property(e => e.CreatedAt).IsRequired();
-            entity.Property(e => e.CreatedBy).IsRequired();
-        });
-
-        // Configure Event
-        builder.Entity<Event>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).ValueGeneratedOnAdd();
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Description).HasMaxLength(500);
-            entity.Property(e => e.StartDate).IsRequired();
-            entity.Property(e => e.EndDate).IsRequired();
-
-            // Relationships
-            entity.HasOne(e => e.Calendar)
-                .WithMany()
-                .HasForeignKey(e => e.CalendarId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Audit properties configuration
-            entity.Property(e => e.CreatedAt).IsRequired();
-            entity.Property(e => e.CreatedBy).IsRequired();
-
-            // Add check constraint for EndDate >= StartDate
-            //entity.HasCheckConstraint("CK_Event_DateRange", "EndDate >= StartDate");
-        });
-
-        // Add global query filters if needed
-        // builder.Entity<Calendar>().HasQueryFilter(e => !e.IsDeleted);  // If you add soft delete
+            foreach (var property in entry.Properties
+                .Where(p => p.Metadata.ClrType == typeof(DateTime) || p.Metadata.ClrType == typeof(DateTime?)))
+            {
+                if (property.CurrentValue is DateTime currentDateTime)
+                {
+                    property.CurrentValue = DateTime.SpecifyKind(currentDateTime, DateTimeKind.Utc);
+                }
+            }
+        }
     }
 }

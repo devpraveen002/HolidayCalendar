@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
 using Serilog;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace HolidayCalendar
 {
@@ -18,10 +19,11 @@ namespace HolidayCalendar
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Configure services
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-            .EnableSensitiveDataLogging()
-            .EnableDetailedErrors());
+                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+                       .EnableSensitiveDataLogging()
+                       .EnableDetailedErrors());
 
             builder.Services.AddIdentity<User, IdentityRole<long>>(options =>
             {
@@ -31,32 +33,25 @@ namespace HolidayCalendar
                 options.Password.RequireUppercase = true;
                 options.Password.RequireLowercase = true;
             })
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
 
+            // Configure logging
             builder.Logging.ClearProviders();
-            builder.Logging.AddConsole();
-            builder.Logging.AddDebug();
-            builder.Logging.SetMinimumLevel(LogLevel.Information);
+            builder.Host.UseSerilog(new LoggerConfiguration()
+                .ReadFrom.Configuration(builder.Configuration)
+                .WriteTo.File("logs/holiday-calendar-.txt", rollingInterval: RollingInterval.Day)
+                .CreateLogger());
 
-            Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(builder.Configuration)
-            .WriteTo.File("logs/holiday-calendar-.txt", rollingInterval: RollingInterval.Day)
-            .CreateLogger();
-
-            builder.Host.UseSerilog();
-
+            // Add services to the container
             builder.Services.AddScoped<ICalendarRepository, CalendarRepository>();
             builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
             builder.Services.AddScoped<ICalendarService, CalendarService>();
-            builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
             builder.Services.AddScoped<ICalendarHolidayRepository, CalendarHolidayRepository>();
-            builder.Services.AddScoped<ICalendarService, CalendarService>();
 
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            // Add services to the container.
-            builder.Services.AddControllersWithViews();
 
+            builder.Services.AddControllersWithViews();
             builder.Services.ConfigureApplicationCookie(options =>
             {
                 options.LoginPath = "/Account/Login";
@@ -64,24 +59,39 @@ namespace HolidayCalendar
                 options.AccessDeniedPath = "/Account/AccessDenied";
             });
 
+            builder.Services.AddAuthorization(options =>
+            {
+                options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+            });
+
             var app = builder.Build();
 
-            using (var scope = app.Services.CreateScope())
+            using var scope = app.Services.CreateScope();
+            var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<Program>>();
+
+            try
             {
-                var services = scope.ServiceProvider;
-                try
+                logger.LogInformation("Starting database initialization");
+                var context = services.GetRequiredService<ApplicationDbContext>();
+
+                if (!await context.Database.CanConnectAsync())
                 {
-                    var context = services.GetRequiredService<ApplicationDbContext>();
-                    await DbInitializer.Initialize(context, services);
+                    logger.LogError("Unable to connect to the database. Please check the connection string.");
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    var logger = services.GetRequiredService<ILogger<Program>>();
-                    logger.LogError(ex, "An error occurred while seeding the database.");
-                }
+
+                await ApplyMigrationsAsync(context, logger);
+                await DbInitializer.Initialize(context, services);
+                logger.LogInformation("Database initialization completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred during database initialization. The application will not start.");
+                return;
             }
 
-            // Configure the HTTP request pipeline.
+            // Configure middleware
             if (app.Environment.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -92,26 +102,38 @@ namespace HolidayCalendar
                 app.UseHsts();
             }
 
-                app.UseHttpsRedirection();
-            //app.UseStaticFiles();
+            app.UseHttpsRedirection();
             app.UseStaticFiles(new StaticFileOptions
             {
                 ContentTypeProvider = new FileExtensionContentTypeProvider
                 {
-                    Mappings = { [".pdf"] = "application/pdf" }
+                    Mappings = { [".pdf"] = "application/pdf", [".ics"] = "text/calendar" }
                 }
             });
 
             app.UseRouting();
-
-                app.UseAuthentication();
-                app.UseAuthorization();
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             app.MapControllerRoute(
-                    name: "default",
-                    pattern: "{controller=Calendar}/{action=Index}/{id?}");
+                name: "default",
+                pattern: "{controller=Calendar}/{action=Index}/{id?}");
 
-                app.Run();
+            app.Run();
+        }
+
+        private static async Task ApplyMigrationsAsync(ApplicationDbContext context, ILogger logger)
+        {
+            if (context.Database.GetPendingMigrations().Any())
+            {
+                logger.LogWarning("Applying pending migrations...");
+                await context.Database.MigrateAsync();
+                logger.LogInformation("Applied pending migrations successfully.");
+            }
+            else
+            {
+                logger.LogInformation("No pending migrations found.");
             }
         }
     }
+}

@@ -2,7 +2,6 @@
 using HolidayCalendar.src.HolidayCalendar.Core.Interfaces;
 using HolidayCalendar.src.HolidayCalendar.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace HolidayCalendar.src.HolidayCalendar.Infrastructure.Repositories
 {
