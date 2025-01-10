@@ -8,4 +8,5 @@ public class CalendarSummaryViewModel
     public string ShareableLink { get; set; }
     public int HolidayCount { get; set; }
     public string CountryCode { get; set; }
+    public long CreatedBy { get; set; }
 }

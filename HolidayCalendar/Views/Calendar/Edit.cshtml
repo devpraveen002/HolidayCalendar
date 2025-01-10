@@ -1,4 +1,4 @@
-﻿@model CalendarViewModel
+﻿@model EditCalendarViewModel
 @{
     ViewData["Title"] = "Edit Calendar";
     var isAdmin = User.IsInRole("Admin");
@@ -11,26 +11,25 @@
                 <div class="card-body">
                     <h2 class="card-title">Edit Calendar</h2>
                     <form asp-action="Edit" method="post">
-                        <input type="hidden" name="id" value="@Model.Calendar.Id" />
-                        <input type="hidden" name="isDefault" value="@Model.Calendar.IsDefault" />
+                        <input type="hidden" asp-for="CalendarId" />
 
                         <div class="mb-3">
-                            <label asp-for="Calendar.Name" class="form-label">Calendar Name</label>
-                            <input asp-for="Calendar.Name" class="form-control" required />
-                            <span asp-validation-for="Calendar.Name" class="text-danger"></span>
+                            <label asp-for="Name" class="form-label">Calendar Name</label>
+                            <input asp-for="Name" class="form-control" required />
+                            <span asp-validation-for="Name" class="text-danger"></span>
                         </div>
 
-                        @if (isAdmin && Model.Calendar.IsDefault)
+                        @if (isAdmin)
                         {
                             <div class="mb-3">
-                                <label asp-for="Calendar.CountryCode" class="form-label">Country</label>
-                                <select asp-for="Calendar.CountryCode" class="form-select" asp-items="Model.AvailableCountries"></select>
-                                <span asp-validation-for="Calendar.CountryCode" class="text-danger"></span>
+                                <label asp-for="SelectedCountry" class="form-label">Country</label>
+                                <select asp-for="SelectedCountry" class="form-select" asp-items="Model.AvailableCountries"></select>
+                                <span asp-validation-for="SelectedCountry" class="text-danger"></span>
                             </div>
                         }
                         else
                         {
-                            <input type="hidden" asp-for="Calendar.CountryCode" />
+                            <input type="hidden" asp-for="SelectedCountry" />
                         }
 
                         <div class="d-flex justify-content-between">

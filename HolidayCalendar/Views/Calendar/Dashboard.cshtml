@@ -1,112 +1,16 @@
-﻿@* @model DashboardViewModel
-@{
-    ViewData["Title"] = "My Calendars";
-}
-
-<div class="container py-4">
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <h2>@(User.IsInRole("Admin") ? "Manage Calendars" : "My Calendars")</h2>
-        </div>
-        <div class="col-md-6 text-end">
-            @if (User.IsInRole("Admin"))
-            {
-                <a asp-action="CreateCountryCalendar" class="btn btn-primary me-2">Create Country Calendar</a>
-            }
-            <a asp-action="Create" class="btn btn-primary">Create New Calendar</a>
-        </div>
-    </div>
-
-    @if (TempData["Success"] != null)
-    {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            @TempData["Success"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
-    @if (TempData["Error"] != null)
-    {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @TempData["Error"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    }
-
-    @if (Model.Calendars.Any())
-    {
-        @if (User.IsInRole("Admin"))
-        {
-            <h3 class="mb-3">Default Country Calendars</h3>
-            <div class="row row-cols-1 row-cols-md-3 g-4 mb-5">
-                @foreach (var calendar in Model.Calendars.Where(c => c.IsDefault))
-                {
-                    <div class="col">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-body">
-                                <h5 class="card-title">@calendar.Name</h5>
-                                <p class="card-text">
-                                    <small class="text-muted">@calendar.HolidayCount holidays</small>
-                                </p>
-                                <span class="badge bg-primary">Default</span>
-                            </div>
-                            <div class="card-footer bg-transparent">
-                                <div class="d-flex justify-content-between">
-                                    <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-sm btn-outline-primary">View</a>
-                                    <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
-                                    <a asp-action="AddEvent" asp-route-id="@calendar.Id" class="btn btn-sm btn-outline-success">Add Event</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-
-        <h3 class="mb-3">@(User.IsInRole("Admin") ? "User Calendars" : "My Calendars")</h3>
-        <div class="row row-cols-1 row-cols-md-3 g-4">
-            @foreach (var calendar in Model.Calendars.Where(c => !c.IsDefault))
-            {
-                <div class="col">
-                    <div class="card h-100 shadow-sm">
-                        <div class="card-body">
-                            <h5 class="card-title">@calendar.Name</h5>
-                            <p class="card-text">
-                                <small class="text-muted">@calendar.HolidayCount holidays</small>
-                            </p>
-                        </div>
-                        <div class="card-footer bg-transparent">
-                            <div class="d-flex justify-content-between">
-                                <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-sm btn-outline-primary">View</a>
-                                <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
-                                <form asp-action="Delete" asp-route-id="@calendar.Id" method="post" onsubmit="return confirm('Are you sure you want to delete this calendar?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="alert alert-info">
-            You don't have any calendars yet. <a asp-action="Create">Create your first calendar</a>.
-        </div>
-    }
-</div> *@
-
-@model DashboardViewModel
+﻿@model DashboardViewModel
+@using System.Security.Claims
 
 <div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center">
-        <h1 class="text-center">Admin Dashboard</h1>
-        <div>
+    <h1>@(User.IsInRole("Admin") ? "Admin Dashboard" : "My Calendars")</h1>
+
+    @if (User.IsInRole("Admin"))
+    {
+        <div class="d-flex justify-content-end mb-4">
             <a asp-action="CreateCountryCalendar" class="btn btn-primary">Create Country Calendar</a>
-            <a asp-action="Create" class="btn btn-secondary">Create New Calendar</a>
+            <a asp-action="Create" class="btn btn-secondary ms-2">Create New Calendar</a>
         </div>
-    </div>
+    }
 
     <table class="table table-bordered table-striped mt-4">
         <thead class="table-dark">
@@ -127,13 +31,20 @@
                     <td>@calendar.HolidayCount</td>
                     <td>@(calendar.IsDefault ? "Yes" : "No")</td>
                     <td>
-                        <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-primary btn-sm">View</a>
+                        <!-- View Button -->
+                        <a asp-action="Index" asp-route-id="@calendar.Id" class="btn btn-primary btn-sm">View</a>
+
+                        <!-- Edit Button -->
                         <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-warning btn-sm mx-1">Edit</a>
-                        <a asp-action="Delete" asp-route-id="@calendar.Id" class="btn btn-danger btn-sm">Delete</a>
+
+                        <!-- Delete Button -->
+                        @if (User.IsInRole("Admin") || calendar.CreatedBy.ToString() == User.FindFirstValue(ClaimTypes.NameIdentifier))
+                        {
+                            <a asp-action="Delete" asp-route-id="@calendar.Id" class="btn btn-danger btn-sm">Delete</a>
+                        }
                     </td>
                 </tr>
             }
         </tbody>
     </table>
 </div>
-

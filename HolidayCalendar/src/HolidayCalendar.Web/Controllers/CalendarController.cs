@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 using System.Security.Claims;
+using HolidayCalendar.src.HolidayCalendar.Core.DTOs;
 
 namespace HolidayCalendar.src.HolidayCalendar.Web.Controllers;
 
@@ -23,7 +24,7 @@ public class CalendarController : Controller
     }
 
     [AllowAnonymous]
-    public async Task<IActionResult> Index(string SelectedCountry = "US", int? month = null, int? year = null)
+    public async Task<IActionResult> Index(Guid? id = null, string SelectedCountry = "US", int? month = null, int? year = null)
     {
         try
         {
@@ -31,12 +32,28 @@ public class CalendarController : Controller
             var currentMonth = month ?? currentDate.Month;
             var currentYear = year ?? currentDate.Year;
 
-            var calendarDto = await _calendarService.GetDefaultCalendarByCountryAsync(SelectedCountry);
-            if (calendarDto == null)
+            CalendarDto calendarDto;
+
+            // If id is provided, fetch the calendar by ID; otherwise, fetch by country
+            if (id.HasValue)
             {
-                _logger.LogWarning("No calendar found for country code: {CountryCode}", SelectedCountry);
-                TempData["Error"] = "Calendar not found for the selected country.";
-                return RedirectToAction("Error", "Home");
+                calendarDto = await _calendarService.GetCalendarByIdAsync(id.Value);
+                if (calendarDto == null)
+                {
+                    _logger.LogWarning("No calendar found for id: {Id}", id.Value);
+                    TempData["Error"] = "Calendar not found.";
+                    return RedirectToAction("Error", "Home");
+                }
+            }
+            else
+            {
+                calendarDto = await _calendarService.GetDefaultCalendarByCountryAsync(SelectedCountry);
+                if (calendarDto == null)
+                {
+                    _logger.LogWarning("No default calendar found for country code: {CountryCode}", SelectedCountry);
+                    TempData["Error"] = "Calendar not found for the selected country.";
+                    return RedirectToAction("Error", "Home");
+                }
             }
 
             var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
@@ -50,14 +67,14 @@ public class CalendarController : Controller
                 Events = events ?? new List<Event>(),
                 CurrentMonth = currentMonth,
                 CurrentYear = currentYear,
-                SelectedCountry = SelectedCountry,
+                SelectedCountry = calendarDto.Calendar.CountryCode,
                 IsEditable = User.Identity.IsAuthenticated && User.IsInRole("Admin"),
                 ShareableLink = calendarDto.ShareableLink,
                 AvailableCountries = countries.Select(c => new SelectListItem
                 {
                     Value = c.CountryCode,
                     Text = c.CountryName,
-                    Selected = c.CountryCode == SelectedCountry
+                    Selected = c.CountryCode == calendarDto.Calendar.CountryCode
                 }).ToList()
             };
 
@@ -67,14 +84,11 @@ public class CalendarController : Controller
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading calendar for country code: {SelectedCountry}", SelectedCountry);
+            _logger.LogError(ex, "Error loading calendar for country code: {SelectedCountry} or id: {Id}", SelectedCountry, id);
             TempData["Error"] = "An error occurred while loading the calendar.";
             return RedirectToAction("Error", "Home");
         }
     }
-
-
-
 
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AdminDashboard()
@@ -211,48 +225,121 @@ public class CalendarController : Controller
     {
         try
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
 
-            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+            if (calendarDto == null)
             {
-                return NotFound();
+                _logger.LogWarning("Calendar not found for id: {Id}", id);
+                TempData["Error"] = "Calendar not found.";
+                return RedirectToAction(nameof(AdminDashboard));
             }
 
-            var viewModel = CalendarViewModel.FromDto(calendarDto, true);
+            var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
+
+            var viewModel = new EditCalendarViewModel
+            {
+                CalendarId = calendarDto.Calendar.Id,
+                Name = calendarDto.Calendar.Name,
+                SelectedCountry = calendarDto.Calendar.CountryCode,
+                AvailableCountries = countries.Select(c => new SelectListItem
+                {
+                    Value = c.CountryCode,
+                    Text = c.CountryName,
+                    Selected = c.CountryCode == calendarDto.Calendar.CountryCode
+                }).ToList()
+            };
+
             return View(viewModel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading calendar for edit");
+            _logger.LogError(ex, "Error loading calendar for edit with id: {Id}", id);
             TempData["Error"] = "An error occurred while loading the calendar.";
+            return RedirectToAction(nameof(AdminDashboard));
+        }
+    }
+
+
+
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> Edit(EditCalendarViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Model state invalid while editing calendar with ID: {CalendarId}", model.CalendarId);
+            TempData["Error"] = "Invalid data provided.";
+            return View(model);
+        }
+
+        try
+        {
+            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var isAdmin = User.IsInRole("Admin");
+
+            // Call service layer to update the calendar
+            await _calendarService.UpdateCalendarAsync(model.CalendarId, model.Name, model.SelectedCountry, userId, isAdmin);
+
+            TempData["Success"] = "Calendar updated successfully!";
+            return isAdmin ? RedirectToAction(nameof(AdminDashboard)) : RedirectToAction(nameof(Dashboard));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TempData["Error"] = "You are not authorized to edit this calendar.";
+            return RedirectToAction(nameof(Dashboard));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating calendar with ID: {CalendarId}", model.CalendarId);
+            TempData["Error"] = "An error occurred while updating the calendar.";
             return RedirectToAction(nameof(Dashboard));
         }
     }
 
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+
+        if (calendarDto == null)
+        {
+            TempData["Error"] = "Calendar not found.";
+            return RedirectToAction(nameof(Dashboard));
+        }
+
+        return View(calendarDto); // Redirects to the Delete confirmation view
+    }
+
+
     [Authorize]
     [HttpPost]
-    public async Task<IActionResult> Delete(Guid id)
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteConfirmed(Guid id)
     {
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isAdmin = User.IsInRole("Admin");
+
             var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
 
-            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+            if (calendarDto == null || (!isAdmin && calendarDto.Calendar.CreatedBy.ToString() != userId))
             {
-                return NotFound();
+                TempData["Error"] = "You are not authorized to delete this calendar.";
+                return RedirectToAction(isAdmin ? nameof(AdminDashboard) : nameof(Dashboard));
             }
 
             if (calendarDto.Calendar.IsDefault)
             {
                 TempData["Error"] = "Cannot delete the default calendar.";
-                return RedirectToAction(nameof(Dashboard));
+                return RedirectToAction(isAdmin ? nameof(AdminDashboard) : nameof(Dashboard));
             }
 
             await _calendarService.DeleteCalendarAsync(id);
             TempData["Success"] = "Calendar deleted successfully!";
-            return RedirectToAction(nameof(Dashboard));
+            return RedirectToAction(isAdmin ? nameof(AdminDashboard) : nameof(Dashboard));
         }
         catch (Exception ex)
         {
@@ -261,6 +348,7 @@ public class CalendarController : Controller
             return RedirectToAction(nameof(Dashboard));
         }
     }
+
 
     [Authorize]
     public async Task<IActionResult> Dashboard()
@@ -273,7 +361,10 @@ public class CalendarController : Controller
                 return RedirectToAction("Login", "Account");
             }
 
+            // Fetch user calendars
             var calendars = await _calendarService.GetUserCalendarsAsync(userId);
+
+            // Map to view model
             var viewModel = new DashboardViewModel
             {
                 Calendars = calendars.Select(c => new CalendarSummaryViewModel
@@ -283,12 +374,13 @@ public class CalendarController : Controller
                     IsDefault = c.Calendar.IsDefault,
                     ShareableLink = c.ShareableLink,
                     HolidayCount = c.Holidays?.Count ?? 0,
-                    CountryCode = c.Calendar.CountryCode // Add this line
+                    CountryCode = c.Calendar.CountryCode,
+                    CreatedBy = c.Calendar.CreatedBy // Ensure this is mapped
                 }).ToList(),
-                IsAdmin = User.IsInRole("Admin") // Add this line
+                IsAdmin = User.IsInRole("Admin")
             };
 
-            // If user is admin, add all default calendars
+            // If admin, include all default calendars
             if (viewModel.IsAdmin)
             {
                 var defaultCalendars = await _calendarService.GetAllDefaultCalendarsAsync();
@@ -299,7 +391,8 @@ public class CalendarController : Controller
                     IsDefault = true,
                     ShareableLink = c.ShareableLink,
                     HolidayCount = c.Holidays?.Count ?? 0,
-                    CountryCode = c.Calendar.CountryCode
+                    CountryCode = c.Calendar.CountryCode,
+                    CreatedBy = c.Calendar.CreatedBy // Ensure this is mapped
                 }));
             }
 
@@ -312,6 +405,7 @@ public class CalendarController : Controller
             return RedirectToAction("Error", "Home");
         }
     }
+
 
     [Authorize]
     [HttpPost]
@@ -332,9 +426,11 @@ public class CalendarController : Controller
     {
         if (ModelState.IsValid)
         {
-            await _calendarService.UpdateCalendarAsync(model.Calendar);
+            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            await _calendarService.UpdateCalendarAsync(model.CalendarId, model.Name, model.SelectedCountry, userId, false);
             return RedirectToAction(nameof(Dashboard));
         }
+
         return View(model);
     }
 

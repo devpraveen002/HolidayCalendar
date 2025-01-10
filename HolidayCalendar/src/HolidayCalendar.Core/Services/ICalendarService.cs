@@ -12,7 +12,9 @@ public interface ICalendarService
     Task<CalendarDto> GetByShareableLinkAsync(string link);
     Task<IEnumerable<CalendarDto>> GetUserCalendarsAsync(string userId);
     Task<CalendarDto> CreateUserCalendarAsync(string userId, string name);
-    Task<CalendarDto> UpdateCalendarAsync(Calendar calendar);
+    //Task<CalendarDto> UpdateCalendarAsync(Calendar calendar);
+    Task<CalendarDto> UpdateCalendarAsync(Guid calendarId, string name, string countryCode, long userId, bool isAdmin);
+
     Task DeleteCalendarAsync(Guid id);
     Task<CalendarDto> AddHolidayAsync(Guid calendarId, Holiday holiday);
 

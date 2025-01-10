@@ -312,23 +312,44 @@ public class CalendarService : ICalendarService
             throw;
         }
     }
-
-    public async Task<CalendarDto> UpdateCalendarAsync(Calendar calendar)
+    public async Task<CalendarDto> UpdateCalendarAsync(Guid calendarId, string name, string countryCode, long userId, bool isAdmin)
     {
         using var transaction = await _calendarRepository.BeginTransactionAsync();
         try
         {
+            var calendar = await _calendarRepository.GetByIdAsync(calendarId);
+            if (calendar == null)
+            {
+                throw new Exception($"Calendar with ID {calendarId} not found.");
+            }
+
+            // Authorization Check
+            if (!isAdmin && calendar.CreatedBy != userId)
+            {
+                throw new UnauthorizedAccessException("You are not authorized to edit this calendar.");
+            }
+
+            // Update properties
+            calendar.Name = name;
+            calendar.CountryCode = countryCode;
+            calendar.ModifiedAt = DateTime.UtcNow;
+            calendar.ModifiedBy = userId;
+
             await _calendarRepository.UpdateAsync(calendar);
             await transaction.CommitAsync();
+
             return await GetCalendarByIdAsync(calendar.Id);
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
-            _logger.LogError(ex, "Error updating calendar");
+            _logger.LogError(ex, "Error updating calendar with ID {CalendarId}", calendarId);
             throw;
         }
     }
+
+
+
 
     public async Task CreateDefaultCalendarAsync(CreateCalendarViewModel model)
     {
@@ -486,28 +507,24 @@ public class CalendarService : ICalendarService
     {
         try
         {
-            // Retrieve all default calendars from the database
+            // Retrieve all default calendars
             var defaultCalendars = await _calendarRepository.GetAllDefaultCalendarsAsync();
 
-            // Create a list to store the CalendarDto objects
+            // Map to CalendarDto
             var calendarDtos = new List<CalendarDto>();
 
-            // Iterate through each default calendar
             foreach (var calendar in defaultCalendars)
             {
-                // Retrieve holidays for the current calendar
+                // Retrieve holidays for the calendar
                 var holidays = await _holidayRepository.GetHolidaysByCalendarIdAsync(calendar.Id);
 
-                // Create a CalendarDto object
-                var calendarDto = new CalendarDto
+                // Map CalendarDto
+                calendarDtos.Add(new CalendarDto
                 {
                     Calendar = calendar,
                     Holidays = holidays.ToList(),
                     ShareableLink = calendar.ShareableLink
-                };
-
-                // Add the CalendarDto to the list
-                calendarDtos.Add(calendarDto);
+                });
             }
 
             return calendarDtos;
@@ -518,6 +535,7 @@ public class CalendarService : ICalendarService
             throw;
         }
     }
+
 
     public async Task<string> GenerateShareableLinkAsync(Guid calendarId)
     {
