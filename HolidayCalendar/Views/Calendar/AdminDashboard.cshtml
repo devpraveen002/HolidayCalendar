@@ -1,7 +1,11 @@
-﻿@model IEnumerable<CalendarDto>
+﻿@model IEnumerable<CalendarSummaryViewModel>
 
 <div class="container py-5">
     <h1>Admin Dashboard</h1>
+
+    <div class="d-flex justify-content-end mb-4">
+        <a asp-action="CreateCountryCalendar" class="btn btn-primary">Create Country Calendar</a>
+    </div>
 
     <table class="table table-bordered table-striped mt-4">
         <thead class="table-dark">
@@ -17,14 +21,16 @@
             @foreach (var calendar in Model)
             {
                 <tr>
-                    <td>@calendar.Calendar.Name</td>
-                    <td>@calendar.Calendar.CountryCode</td>
-                    <td>@(calendar.Holidays?.Count ?? 0)</td>
-                    <td>@(calendar.Calendar.IsDefault ? "Yes" : "No")</td>
+                    <td>@calendar.Name</td>
+                    <td>@calendar.CountryCode</td>
+                    <td>@calendar.HolidayCount</td>
+                    <td>@(calendar.IsDefault ? "Yes" : "No")</td>
                     <td>
-                        <a asp-action="Index" asp-route-id="@calendar.Calendar.Id" class="btn btn-primary btn-sm">View</a>
-                        <a asp-action="Edit" asp-route-id="@calendar.Calendar.Id" class="btn btn-warning btn-sm mx-1">Edit</a>
-                        <a asp-action="Delete" asp-route-id="@calendar.Calendar.Id" class="btn btn-danger btn-sm">Delete</a>
+                        <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-primary btn-sm">View</a>
+                        <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-warning btn-sm mx-1">Edit</a>
+                        <form asp-action="Delete" asp-route-id="@calendar.Id" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
                     </td>
                 </tr>
             }

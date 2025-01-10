@@ -119,6 +119,18 @@ public class CalendarRepository : ICalendarRepository
         }
     }
 
+    public async Task RemoveHolidaysByCalendarIdAsync(Guid calendarId)
+    {
+        var calendarHolidays = await _context.CalendarHolidays
+            .Where(ch => ch.CalendarId == calendarId)
+            .ToListAsync();
+
+        if (calendarHolidays.Any())
+        {
+            _context.CalendarHolidays.RemoveRange(calendarHolidays);
+            await _context.SaveChangesAsync();
+        }
+    }
     public async Task<IEnumerable<Calendar>> GetUserCalendarsAsync(long userId)
     {
         try
@@ -323,6 +335,15 @@ public class CalendarRepository : ICalendarRepository
                     : countryCode;
     }
 
+    public async Task<IEnumerable<Holiday>> GetHolidaysByCalendarIdAsync(Guid calendarId)
+    {
+        return await _context.CalendarHolidays
+            .Where(ch => ch.CalendarId == calendarId)
+            .Include(ch => ch.Holiday) // Ensure you include the related Holiday entity
+            .Select(ch => ch.Holiday)
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<Calendar>> GetAllDefaultCalendarsAsync()
     {
         return await _context.Calendars
@@ -342,4 +363,40 @@ public class CalendarRepository : ICalendarRepository
             throw;
         }
     }
+
+    public async Task UpdateUserCalendarCountryAsync(Guid calendarId, string countryCode)
+    {
+        try
+        {
+            var userCalendar = await _context.UserCalendars
+                .FirstOrDefaultAsync(uc => uc.CalendarId == calendarId);
+
+            if (userCalendar != null)
+            {
+                userCalendar.CountryCode = countryCode; // Update the CountryCode
+                _context.UserCalendars.Update(userCalendar);
+                await _context.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating country code for calendar {CalendarId}", calendarId);
+            throw;
+        }
+    }
+
+    public async Task AddCountryAsync(Country country)
+    {
+        try
+        {
+            _context.Countries.Add(country);
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding country with code {CountryCode}", country.CountryCode);
+            throw;
+        }
+    }
+
 }

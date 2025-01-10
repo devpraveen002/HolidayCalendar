@@ -20,14 +20,13 @@ public interface ICalendarRepository
     Task DeleteEventAsync(Guid eventId);
     Task<IEnumerable<Event>> GetEventsByCalendarIdAsync(Guid calendarId);
     Task<bool> IsUserAuthorizedForCalendarAsync(Guid calendarId, long userId);
-
     Task<IEnumerable<Calendar>> GetCalendarsByCountryAsync(string countryCode);
-
+    Task AddCountryAsync(Country country);
     Task<Calendar> GetDefaultCalendarByCountryAsync(string countryCode);
     Task<Calendar> GetUserCalendarByCountryAsync(long userId, string countryCode);
     Task<List<CountryViewModel>> GetDefaultCalendarCountriesAsync();
     Task CreateUserCalendarAsync(UserCalendar userCalendar);
     Task<IEnumerable<Calendar>> GetAllDefaultCalendarsAsync();
     Task<IEnumerable<Calendar>> GetAllCalendarsAsync();
-
+    Task UpdateUserCalendarCountryAsync(Guid calendarId, string countryCode);
 }

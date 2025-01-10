@@ -1,7 +1,6 @@
 ﻿@model EditCalendarViewModel
 @{
     ViewData["Title"] = "Edit Calendar";
-    var isAdmin = User.IsInRole("Admin");
 }
 
 <div class="container mt-4">
@@ -10,30 +9,26 @@
             <div class="card">
                 <div class="card-body">
                     <h2 class="card-title">Edit Calendar</h2>
-                    <form asp-action="Edit" method="post">
+                    <form asp-action="EditUserCalendar" method="post">
                         <input type="hidden" asp-for="CalendarId" />
 
+                        <!-- Calendar Name -->
                         <div class="mb-3">
                             <label asp-for="Name" class="form-label">Calendar Name</label>
                             <input asp-for="Name" class="form-control" required />
                             <span asp-validation-for="Name" class="text-danger"></span>
                         </div>
 
-                        @if (isAdmin)
-                        {
-                            <div class="mb-3">
-                                <label asp-for="SelectedCountry" class="form-label">Country</label>
-                                <select asp-for="SelectedCountry" class="form-select" asp-items="Model.AvailableCountries"></select>
-                                <span asp-validation-for="SelectedCountry" class="text-danger"></span>
-                            </div>
-                        }
-                        else
-                        {
-                            <input type="hidden" asp-for="SelectedCountry" />
-                        }
+                        <!-- Country Dropdown (Disabled) -->
+                        <div class="mb-3">
+                            <label asp-for="SelectedCountry" class="form-label">Country</label>
+                            <select asp-for="SelectedCountry" class="form-select" asp-items="Model.AvailableCountries" disabled></select>
+                            <input type="hidden" asp-for="SelectedCountry" /> <!-- Hidden input to submit the value -->
+                            <span asp-validation-for="SelectedCountry" class="text-danger"></span>
+                        </div>
 
                         <div class="d-flex justify-content-between">
-                            <a asp-action="Dashboard" class="btn btn-secondary">Back</a>
+                            <a asp-action="@((User.IsInRole("Admin")) ? "AdminDashboard" : "Dashboard")" class="btn btn-secondary">Back</a>
                             <button type="submit" class="btn btn-primary">Save Changes</button>
                         </div>
                     </form>

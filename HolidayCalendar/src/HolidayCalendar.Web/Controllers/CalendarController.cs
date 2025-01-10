@@ -93,41 +93,179 @@ public class CalendarController : Controller
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AdminDashboard()
     {
-        var calendars = await _calendarService.GetAllCalendarsAsync();
-        return View(calendars);
+        try
+        {
+            var calendars = await _calendarService.GetAllDefaultCalendarsAsync();
+
+            var viewModel = calendars.Select(c => new CalendarSummaryViewModel
+            {
+                Id = c.Calendar.Id,
+                Name = c.Calendar.Name,
+                ShareableLink = c.ShareableLink,
+                HolidayCount = c.Holidays?.Count ?? 0,
+                CountryCode = c.Calendar.CountryCode,
+                IsDefault = c.Calendar.IsDefault,
+                CreatedBy = c.Calendar.CreatedBy
+            });
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading admin dashboard");
+            TempData["Error"] = "An error occurred while loading the dashboard.";
+            return RedirectToAction("Error", "Home");
+        }
     }
 
     [Authorize(Roles = "Admin")]
-    [HttpPost]
-    public async Task<IActionResult> CreateCountryCalendar(CreateCalendarViewModel model)
+    [HttpGet]
+    public IActionResult CreateCountry()
     {
-        if (ModelState.IsValid)
+        var countries = new List<SelectListItem>
+    {
+        new SelectListItem { Value = "US", Text = "United States" },
+        new SelectListItem { Value = "CA", Text = "Canada" },
+        new SelectListItem { Value = "UK", Text = "United Kingdom" },
+        new SelectListItem { Value = "AU", Text = "Australia" },
+        // Add more countries if needed
+    };
+
+        var viewModel = new CreateCountryViewModel
         {
-            await _calendarService.CreateDefaultCalendarAsync(model);
+            AvailableCountries = countries
+        };
+
+        return View(viewModel);
+    }
+
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost]
+    public async Task<IActionResult> CreateCountry(CreateCountryViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        try
+        {
+            var country = new Country
+            {
+                CountryCode = model.SelectedCountryCode,
+                CountryName = model.SelectedCountryName,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))
+            };
+
+            await _calendarService.AddCountryAsync(country);
+
+            TempData["Success"] = "Country added successfully!";
             return RedirectToAction(nameof(AdminDashboard));
         }
-        return View(model);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding country");
+            TempData["Error"] = "An error occurred while adding the country.";
+            return View(model);
+        }
     }
 
-    [Authorize(Roles = "Admin")]
+    //[Authorize(Roles = "Admin")]
+    //[HttpPost]
+    //public async Task<IActionResult> EditEvent(EditEventViewModel model)
+    //{
+    //    if (ModelState.IsValid)
+    //    {
+    //        await _calendarService.UpdateEventAsync(model.CalendarId, model.Event);
+    //        return RedirectToAction(nameof(AdminDashboard));
+    //    }
+    //    return View(model);
+    //}
+    [Authorize]
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditEvent(EditEventViewModel model)
     {
-        if (ModelState.IsValid)
+        if (!ModelState.IsValid)
         {
-            await _calendarService.UpdateEventAsync(model.CalendarId, model.Event);
-            return RedirectToAction(nameof(AdminDashboard));
+            TempData["Error"] = "Invalid event data.";
+            return RedirectToAction("View", new { id = model.CalendarId });
         }
-        return View(model);
+
+        try
+        {
+            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var isAdmin = User.IsInRole("Admin");
+
+            var eventEntity = new Event
+            {
+                Id = model.EventId,
+                CalendarId = model.CalendarId,
+                Name = model.Name,
+                Description = model.Description,
+                StartDate = model.StartDate,
+                EndDate = model.EndDate,
+                ModifiedAt = DateTime.UtcNow,
+                ModifiedBy = userId
+            };
+
+            await _calendarService.UpdateEventAsync(model.CalendarId, eventEntity, userId, isAdmin);
+
+            TempData["Success"] = "Event updated successfully!";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TempData["Error"] = "You are not authorized to edit this event.";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error editing event");
+            TempData["Error"] = "An error occurred while editing the event.";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
     }
 
-    [Authorize(Roles = "Admin")]
+    //[Authorize(Roles = "Admin")]
+    //[HttpPost]
+    //public async Task<IActionResult> DeleteEvent(Guid eventId, Guid calendarId)
+    //{
+    //    await _calendarService.DeleteEventAsync(calendarId, eventId);
+    //    return RedirectToAction(nameof(AdminDashboard));
+    //}
+
+    [Authorize]
     [HttpPost]
-    public async Task<IActionResult> DeleteEvent(Guid eventId, Guid calendarId)
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteEvent(DeleteEventViewModel model)
     {
-        await _calendarService.DeleteEventAsync(calendarId, eventId);
-        return RedirectToAction(nameof(AdminDashboard));
+        try
+        {
+            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var isAdmin = User.IsInRole("Admin");
+
+            await _calendarService.DeleteEventAsync(model.CalendarId, model.EventId, userId, isAdmin);
+
+            TempData["Success"] = "Event deleted successfully!";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TempData["Error"] = "You are not authorized to delete this event.";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting event");
+            TempData["Error"] = "An error occurred while deleting the event.";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
     }
+
 
 
     [HttpPost]
@@ -193,8 +331,7 @@ public class CalendarController : Controller
                 return RedirectToAction("Login", "Account");
             }
 
-            // Check if user is admin
-            bool isAdmin = User.IsInRole("Admin");
+            var isAdmin = User.IsInRole("Admin");
 
             if (isAdmin && model.IsDefault)
             {
@@ -205,11 +342,11 @@ public class CalendarController : Controller
             else
             {
                 // Regular user creating their calendar
-                await _calendarService.CreateUserCalendarAsync(userId, model.Name);
+                await _calendarService.CreateUserCalendarAsync(userId, model.Name, model.CountryCode);
             }
 
             TempData["Success"] = "Calendar created successfully!";
-            return RedirectToAction(nameof(Dashboard));
+            return RedirectBasedOnRole();
         }
         catch (Exception ex)
         {
@@ -231,7 +368,7 @@ public class CalendarController : Controller
             {
                 _logger.LogWarning("Calendar not found for id: {Id}", id);
                 TempData["Error"] = "Calendar not found.";
-                return RedirectToAction(nameof(AdminDashboard));
+                return RedirectBasedOnRole();
             }
 
             var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
@@ -255,7 +392,7 @@ public class CalendarController : Controller
         {
             _logger.LogError(ex, "Error loading calendar for edit with id: {Id}", id);
             TempData["Error"] = "An error occurred while loading the calendar.";
-            return RedirectToAction(nameof(AdminDashboard));
+            return RedirectBasedOnRole();
         }
     }
 
@@ -277,22 +414,22 @@ public class CalendarController : Controller
             var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
             var isAdmin = User.IsInRole("Admin");
 
-            // Call service layer to update the calendar
+            // Update the calendar
             await _calendarService.UpdateCalendarAsync(model.CalendarId, model.Name, model.SelectedCountry, userId, isAdmin);
 
             TempData["Success"] = "Calendar updated successfully!";
-            return isAdmin ? RedirectToAction(nameof(AdminDashboard)) : RedirectToAction(nameof(Dashboard));
+            return RedirectBasedOnRole();
         }
         catch (UnauthorizedAccessException)
         {
             TempData["Error"] = "You are not authorized to edit this calendar.";
-            return RedirectToAction(nameof(Dashboard));
+            return RedirectBasedOnRole();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating calendar with ID: {CalendarId}", model.CalendarId);
             TempData["Error"] = "An error occurred while updating the calendar.";
-            return RedirectToAction(nameof(Dashboard));
+            return RedirectBasedOnRole();
         }
     }
 
@@ -328,31 +465,100 @@ public class CalendarController : Controller
             if (calendarDto == null || (!isAdmin && calendarDto.Calendar.CreatedBy.ToString() != userId))
             {
                 TempData["Error"] = "You are not authorized to delete this calendar.";
-                return RedirectToAction(isAdmin ? nameof(AdminDashboard) : nameof(Dashboard));
+                return RedirectBasedOnRole();
             }
 
             if (calendarDto.Calendar.IsDefault)
             {
                 TempData["Error"] = "Cannot delete the default calendar.";
-                return RedirectToAction(isAdmin ? nameof(AdminDashboard) : nameof(Dashboard));
+                return RedirectBasedOnRole();
             }
 
             await _calendarService.DeleteCalendarAsync(id);
             TempData["Success"] = "Calendar deleted successfully!";
-            return RedirectToAction(isAdmin ? nameof(AdminDashboard) : nameof(Dashboard));
+            return RedirectBasedOnRole();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting calendar");
             TempData["Error"] = "An error occurred while deleting the calendar.";
-            return RedirectToAction(nameof(Dashboard));
+            return RedirectBasedOnRole();
         }
     }
+
 
 
     [Authorize]
     public async Task<IActionResult> Dashboard()
     {
+        try
+        {
+            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            var calendars = await _calendarService.GetUserCalendarsAsync(userId.ToString());
+
+            var viewModel = calendars.Select(c => new CalendarSummaryViewModel
+            {
+                Id = c.Calendar.Id,
+                Name = c.Calendar.Name,
+                ShareableLink = c.ShareableLink,
+                HolidayCount = c.Holidays?.Count ?? 0,
+                CountryCode = c.Calendar.CountryCode,
+                IsDefault = c.Calendar.IsDefault,
+                CreatedBy = c.Calendar.CreatedBy
+            });
+
+            return View(viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading user dashboard");
+            TempData["Error"] = "An error occurred while loading the dashboard.";
+            return RedirectToAction("Error", "Home");
+        }
+    }
+
+
+
+    private IActionResult RedirectBasedOnRole()
+    {
+        return User.IsInRole("Admin") ? RedirectToAction(nameof(AdminDashboard)) : RedirectToAction(nameof(Dashboard));
+    }
+
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> CreateUserCalendar()
+    {
+        var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
+        var viewModel = new CreateCalendarViewModel
+        {
+            AvailableCountries = countries.Select(c => new SelectListItem
+            {
+                Value = c.CountryCode,
+                Text = c.CountryName
+            }).ToList()
+        };
+
+        return View(viewModel);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateUserCalendar(CreateCalendarViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
+            model.AvailableCountries = countries.Select(c => new SelectListItem
+            {
+                Value = c.CountryCode,
+                Text = c.CountryName
+            }).ToList();
+            return View(model);
+        }
+
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -361,118 +567,185 @@ public class CalendarController : Controller
                 return RedirectToAction("Login", "Account");
             }
 
-            // Fetch user calendars
-            var calendars = await _calendarService.GetUserCalendarsAsync(userId);
+            // Pass CountryCode to the service
+            await _calendarService.CreateUserCalendarAsync(userId, model.Name, model.CountryCode);
 
-            // Map to view model
-            var viewModel = new DashboardViewModel
-            {
-                Calendars = calendars.Select(c => new CalendarSummaryViewModel
-                {
-                    Id = c.Calendar.Id,
-                    Name = c.Calendar.Name,
-                    IsDefault = c.Calendar.IsDefault,
-                    ShareableLink = c.ShareableLink,
-                    HolidayCount = c.Holidays?.Count ?? 0,
-                    CountryCode = c.Calendar.CountryCode,
-                    CreatedBy = c.Calendar.CreatedBy // Ensure this is mapped
-                }).ToList(),
-                IsAdmin = User.IsInRole("Admin")
-            };
-
-            // If admin, include all default calendars
-            if (viewModel.IsAdmin)
-            {
-                var defaultCalendars = await _calendarService.GetAllDefaultCalendarsAsync();
-                viewModel.Calendars.AddRange(defaultCalendars.Select(c => new CalendarSummaryViewModel
-                {
-                    Id = c.Calendar.Id,
-                    Name = c.Calendar.Name,
-                    IsDefault = true,
-                    ShareableLink = c.ShareableLink,
-                    HolidayCount = c.Holidays?.Count ?? 0,
-                    CountryCode = c.Calendar.CountryCode,
-                    CreatedBy = c.Calendar.CreatedBy // Ensure this is mapped
-                }));
-            }
-
-            return View(viewModel);
+            TempData["Success"] = "Calendar created successfully!";
+            return RedirectToAction(nameof(Dashboard));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading dashboard for user {UserId}", User.FindFirstValue(ClaimTypes.NameIdentifier));
-            TempData["Error"] = "An error occurred while loading your calendars.";
+            _logger.LogError(ex, "Error creating calendar");
+            TempData["Error"] = "An error occurred while creating the calendar.";
             return RedirectToAction("Error", "Home");
         }
     }
 
 
     [Authorize]
-    [HttpPost]
-    public async Task<IActionResult> CreateUserCalendar(CreateCalendarViewModel model)
+    [HttpGet]
+    public async Task<IActionResult> EditUserCalendar(Guid id)
     {
-        if (ModelState.IsValid)
+        try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            await _calendarService.CreateUserCalendarAsync(userId, model.Name);
+            var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+
+            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+            {
+                TempData["Error"] = "You are not authorized to edit this calendar.";
+                return RedirectToAction(nameof(Dashboard));
+            }
+
+            var countries = await _calendarService.GetDefaultCalendarCountriesAsync();
+
+            var viewModel = new EditCalendarViewModel
+            {
+                CalendarId = calendarDto.Calendar.Id,
+                Name = calendarDto.Calendar.Name,
+                SelectedCountry = calendarDto.Calendar.CountryCode,
+                AvailableCountries = countries.Select(c => new SelectListItem
+                {
+                    Value = c.CountryCode,
+                    Text = c.CountryName,
+                    Selected = c.CountryCode == calendarDto.Calendar.CountryCode
+                }).ToList()
+            };
+
+            return View("Edit", viewModel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading calendar for edit with id: {Id}", id);
+            TempData["Error"] = "An error occurred while loading the calendar.";
             return RedirectToAction(nameof(Dashboard));
         }
-        return View(model);
     }
+
 
     [Authorize]
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditUserCalendar(EditCalendarViewModel model)
     {
-        if (ModelState.IsValid)
+        if (!ModelState.IsValid)
         {
-            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
-            await _calendarService.UpdateCalendarAsync(model.CalendarId, model.Name, model.SelectedCountry, userId, false);
-            return RedirectToAction(nameof(Dashboard));
+            TempData["Error"] = "Invalid data provided.";
+            return View("Edit", model);
         }
 
-        return View(model);
+        try
+        {
+            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            var currentCalendar = await _calendarService.GetCalendarByIdAsync(model.CalendarId);
+
+            if (currentCalendar.Calendar.CreatedBy != userId)
+            {
+                TempData["Error"] = "You are not authorized to edit this calendar.";
+                return RedirectToAction(nameof(Dashboard));
+            }
+
+            // Use the existing country code from the database
+            var selectedCountry = currentCalendar.Calendar.CountryCode;
+
+            var updatedCalendar = await _calendarService.UpdateCalendarAsync(
+                model.CalendarId,
+                model.Name,
+                selectedCountry, // Use the country code from the database
+                userId,
+                isAdmin: false
+            );
+
+            TempData["Success"] = "Calendar updated successfully!";
+            return RedirectToAction(nameof(Dashboard));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TempData["Error"] = "You are not authorized to edit this calendar.";
+            return RedirectToAction(nameof(Dashboard));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating calendar with ID: {CalendarId}", model.CalendarId);
+            TempData["Error"] = "An error occurred while updating the calendar.";
+            return RedirectToAction(nameof(Dashboard));
+        }
     }
+
+
 
     [Authorize]
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteUserCalendar(Guid calendarId)
     {
-        await _calendarService.DeleteCalendarAsync(calendarId);
-        return RedirectToAction(nameof(Dashboard));
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var calendarDto = await _calendarService.GetCalendarByIdAsync(calendarId);
+
+            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+            {
+                TempData["Error"] = "You are not authorized to delete this calendar.";
+                return RedirectToAction(nameof(Dashboard));
+            }
+
+            await _calendarService.DeleteCalendarAsync(calendarId);
+
+            TempData["Success"] = "Calendar deleted successfully!";
+            return RedirectToAction(nameof(Dashboard));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting calendar with ID: {CalendarId}", calendarId);
+            TempData["Error"] = "An error occurred while deleting the calendar.";
+            return RedirectToAction(nameof(Dashboard));
+        }
     }
 
+    [Authorize]
     public async Task<IActionResult> View(Guid id, int? month = null, int? year = null)
     {
         try
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
-            if (calendarDto == null)
-                return NotFound();
+
+            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+            {
+                return Unauthorized();
+            }
 
             var currentDate = DateTime.Now;
-            var viewModel = CalendarViewModel.FromDto(calendarDto,
-                User.Identity.IsAuthenticated &&
-                calendarDto.Calendar.CreatedBy.ToString() == User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var viewModel = CalendarViewModel.FromDto(calendarDto, true);
 
             viewModel.CurrentMonth = month ?? currentDate.Month;
             viewModel.CurrentYear = year ?? currentDate.Year;
-            viewModel.UpdateNavigationDates();
 
-            // Get events for the current month
-            var events = await _calendarService.GetEventsByCalendarIdAsync(id);
-            viewModel.Events = events.Where(e =>
-                e.StartDate.Year == viewModel.CurrentYear &&
-                e.StartDate.Month == viewModel.CurrentMonth).ToList();
+            // Filter dropdown for user's calendars
+            var userCalendars = await _calendarService.GetUserCalendarsAsync(userId);
+            viewModel.AvailableCountries = userCalendars.Select(c => new SelectListItem
+            {
+                Value = c.Calendar.CountryCode,
+                Text = c.Calendar.Name,
+                Selected = c.Calendar.Id == id
+            }).ToList();
+
+            // Fetch holidays specific to the calendar
+            viewModel.Holidays = await _calendarService.GetHolidaysByCalendarIdAsync(id);
+            viewModel.Events = await _calendarService.GetEventsByCalendarIdAsync(id);
 
             return View(viewModel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error viewing calendar");
+            _logger.LogError(ex, "Error loading calendar view for id {Id}", id);
             return RedirectToAction("Error", "Home");
         }
     }
+
+
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -502,6 +775,45 @@ public class CalendarController : Controller
             return RedirectToAction("View", new { id = calendarId });
         }
     }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddEvent(AddEventViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            TempData["Error"] = "Invalid event data.";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+
+        try
+        {
+            var eventEntity = new Event
+            {
+                Id = Guid.NewGuid(),
+                CalendarId = model.CalendarId,
+                Name = model.Name,
+                Description = model.Description,
+                StartDate = model.StartDate,
+                EndDate = model.EndDate,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))
+            };
+
+            await _calendarService.AddEventAsync(model.CalendarId, eventEntity);
+
+            TempData["Success"] = "Event added successfully!";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding event");
+            TempData["Error"] = "An error occurred while adding the event.";
+            return RedirectToAction("View", new { id = model.CalendarId });
+        }
+    }
+
 
     [HttpGet]
     public async Task<IActionResult> ExportToExcel(Guid calendarId, DateTime date)

@@ -6,5 +6,6 @@
         public Guid CalendarId { get; set; }
         public User User { get; set; }
         public Calendar Calendar { get; set; }
+        public string CountryCode { get; set; }
     }
 }

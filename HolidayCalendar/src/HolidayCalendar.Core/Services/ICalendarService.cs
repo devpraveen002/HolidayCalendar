@@ -11,17 +11,16 @@ public interface ICalendarService
     Task<CalendarDto> GetDefaultCalendarAsync();
     Task<CalendarDto> GetByShareableLinkAsync(string link);
     Task<IEnumerable<CalendarDto>> GetUserCalendarsAsync(string userId);
-    Task<CalendarDto> CreateUserCalendarAsync(string userId, string name);
-    //Task<CalendarDto> UpdateCalendarAsync(Calendar calendar);
+    Task<CalendarDto> CreateUserCalendarAsync(string userId, string name, string countryCode);
     Task<CalendarDto> UpdateCalendarAsync(Guid calendarId, string name, string countryCode, long userId, bool isAdmin);
-
+    Task AddCountryAsync(Country country);
     Task DeleteCalendarAsync(Guid id);
     Task<CalendarDto> AddHolidayAsync(Guid calendarId, Holiday holiday);
-
     Task<Event> AddEventAsync(Guid calendarId, Event @event);
-    Task<Event> UpdateEventAsync(Guid calendarId, Event @event);
-    Task DeleteEventAsync(Guid calendarId, Guid eventId);
+    Task<Event> UpdateEventAsync(Guid calendarId, Event @event, long userId, bool isAdmin);
+    Task DeleteEventAsync(Guid calendarId, Guid eventId, long userId, bool isAdmin);
     Task<IEnumerable<Event>> GetEventsByCalendarIdAsync(Guid calendarId);
+    Task<IEnumerable<Holiday>> GetHolidaysByCalendarIdAsync(Guid calendarId);
 
     // Calendar sharing
     Task<string> GenerateShareableLinkAsync(Guid calendarId);
@@ -49,4 +48,5 @@ public interface ICalendarService
     Task<CalendarDto> GetUserCalendarAsync(string userId, string countryCode);
     Task<List<CountryViewModel>> GetDefaultCalendarCountriesAsync();
     Task CreateUserCalendarAsync(UserCalendar userCalendar);
+    Task UpdateCalendarHolidaysAsync(Guid id, string selectedCountry, long userId);
 }

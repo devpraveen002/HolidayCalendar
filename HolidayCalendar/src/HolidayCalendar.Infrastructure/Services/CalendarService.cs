@@ -107,7 +107,6 @@ public class CalendarService : ICalendarService
     {
         try
         {
-            // Convert string userId to long for repository call
             if (!long.TryParse(userId, out long userIdLong))
             {
                 throw new ArgumentException("Invalid user ID format", nameof(userId));
@@ -118,11 +117,13 @@ public class CalendarService : ICalendarService
 
             foreach (var calendar in calendars)
             {
-                var holidays = await _holidayRepository.GetHolidaysByCalendarIdAsync(calendar.Id);
+                // Fetch the updated list of holidays
+                var holidays = await _calendarHolidayRepository.GetHolidaysByCalendarIdAsync(calendar.Id);
+
                 calendarDtos.Add(new CalendarDto
                 {
                     Calendar = calendar,
-                    Holidays = holidays.ToList(),
+                    Holidays = holidays.ToList(), // Ensure updated holidays are fetched
                     ShareableLink = calendar.ShareableLink
                 });
             }
@@ -150,6 +151,7 @@ public class CalendarService : ICalendarService
             {
                 Id = userCalendar.CalendarId,
                 Name = $"Calendar for User {userCalendar.UserId}",
+                CountryCode = userCalendar.CountryCode, // Ensure the country code is included
                 IsDefault = false,
                 ShareableLink = Guid.NewGuid().ToString(),
                 CreatedAt = DateTime.UtcNow,
@@ -159,18 +161,22 @@ public class CalendarService : ICalendarService
             await _calendarRepository.CreateAsync(calendar);
             await _calendarRepository.CreateUserCalendarAsync(userCalendar);
 
-            // Copy default holidays if they exist
-            var defaultHolidays = await _holidayRepository.GetDefaultHolidaysAsync();
-            foreach (var holiday in defaultHolidays)
+            // Copy country-specific holidays
+            var defaultCalendar = await _calendarRepository.GetDefaultCalendarByCountryAsync(userCalendar.CountryCode);
+            if (defaultCalendar != null)
             {
-                await _calendarHolidayRepository.CreateAsync(new CalendarHoliday
+                var countryHolidays = await _holidayRepository.GetHolidaysByCalendarIdAsync(defaultCalendar.Id);
+                foreach (var holiday in countryHolidays)
                 {
-                    Id = Guid.NewGuid(),
-                    CalendarId = userCalendar.CalendarId,
-                    HolidayId = holiday.Id,
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedBy = userCalendar.UserId
-                });
+                    await _calendarHolidayRepository.CreateAsync(new CalendarHoliday
+                    {
+                        Id = Guid.NewGuid(),
+                        CalendarId = userCalendar.CalendarId,
+                        HolidayId = holiday.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = userCalendar.UserId
+                    });
+                }
             }
 
             await transaction.CommitAsync();
@@ -182,7 +188,8 @@ public class CalendarService : ICalendarService
             throw;
         }
     }
-    public async Task<CalendarDto> CreateUserCalendarAsync(string userId, string name)
+
+    public async Task<CalendarDto> CreateUserCalendarAsync(string userId, string name, string countryCode)
     {
         using var transaction = await _calendarRepository.BeginTransactionAsync();
         try
@@ -192,11 +199,15 @@ public class CalendarService : ICalendarService
                 throw new ArgumentException("Invalid user ID format", nameof(userId));
             }
 
+            // Create the calendar
             var calendar = new Calendar
             {
                 Id = Guid.NewGuid(),
                 Name = name,
+                CountryCode = countryCode,
                 IsDefault = false,
+                IsDefaultCountryCalendar = false,
+                IsUserCreated = true,
                 ShareableLink = Guid.NewGuid().ToString(),
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = userIdLong
@@ -204,29 +215,35 @@ public class CalendarService : ICalendarService
 
             calendar = await _calendarRepository.CreateAsync(calendar);
 
+            // Create UserCalendar
             var userCalendar = new UserCalendar
             {
                 Id = Guid.NewGuid(),
                 UserId = userIdLong,
                 CalendarId = calendar.Id,
+                CountryCode = countryCode, // Pass CountryCode
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = userIdLong
             };
 
             await _calendarRepository.CreateUserCalendarAsync(userCalendar);
 
-            // Copy default holidays
-            var defaultHolidays = await _holidayRepository.GetDefaultHolidaysAsync();
-            foreach (var holiday in defaultHolidays)
+            // Copy country-specific holidays
+            var defaultCalendar = await _calendarRepository.GetDefaultCalendarByCountryAsync(countryCode);
+            if (defaultCalendar != null)
             {
-                await _calendarHolidayRepository.CreateAsync(new CalendarHoliday
+                var countryHolidays = await _holidayRepository.GetHolidaysByCalendarIdAsync(defaultCalendar.Id);
+                foreach (var holiday in countryHolidays)
                 {
-                    Id = Guid.NewGuid(),
-                    CalendarId = calendar.Id,
-                    HolidayId = holiday.Id,
-                    CreatedAt = DateTime.UtcNow,
-                    CreatedBy = userIdLong
-                });
+                    await _calendarHolidayRepository.CreateAsync(new CalendarHoliday
+                    {
+                        Id = Guid.NewGuid(),
+                        CalendarId = calendar.Id,
+                        HolidayId = holiday.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = userIdLong
+                    });
+                }
             }
 
             await transaction.CommitAsync();
@@ -239,6 +256,65 @@ public class CalendarService : ICalendarService
             throw;
         }
     }
+
+
+
+    public async Task UpdateCalendarHolidaysAsync(Guid calendarId, string countryCode, long userId)
+    {
+        using var transaction = await _calendarRepository.BeginTransactionAsync();
+        try
+        {
+            _logger.LogInformation("Starting holiday update for calendar {CalendarId}", calendarId);
+
+            // Remove existing holidays
+            _logger.LogInformation("Removing existing holidays for calendar {CalendarId}", calendarId);
+            await _calendarHolidayRepository.RemoveHolidaysByCalendarIdAsync(calendarId);
+
+            // Fetch default calendar for the new country
+            _logger.LogInformation("Fetching default calendar for country {CountryCode}", countryCode);
+            var defaultCalendar = await _calendarRepository.GetDefaultCalendarByCountryAsync(countryCode);
+
+            if (defaultCalendar != null)
+            {
+                _logger.LogInformation("Fetching holidays from default calendar {DefaultCalendarId} for country {CountryCode}",
+                    defaultCalendar.Id, countryCode);
+
+                var countryHolidays = await _holidayRepository.GetHolidaysByCalendarIdAsync(defaultCalendar.Id);
+                _logger.LogInformation("Found {HolidayCount} holidays for country {CountryCode}", countryHolidays.Count(), countryCode);
+
+                // Add holidays for the new country
+                foreach (var holiday in countryHolidays)
+                {
+                    _logger.LogInformation("Adding holiday {HolidayId} to calendar {CalendarId}", holiday.Id, calendarId);
+
+                    await _calendarHolidayRepository.CreateAsync(new CalendarHoliday
+                    {
+                        Id = Guid.NewGuid(),
+                        CalendarId = calendarId,
+                        HolidayId = holiday.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = userId
+                    });
+                }
+            }
+            else
+            {
+                _logger.LogWarning("No default calendar found for country {CountryCode}", countryCode);
+            }
+
+            await transaction.CommitAsync();
+            _logger.LogInformation("Finished holiday update for calendar {CalendarId}", calendarId);
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "Error updating holidays for calendar {CalendarId}", calendarId);
+            throw;
+        }
+    }
+
+
+
 
     public async Task<CalendarDto> GetDefaultCalendarByCountryAsync(string countryCode)
     {
@@ -348,9 +424,6 @@ public class CalendarService : ICalendarService
         }
     }
 
-
-
-
     public async Task CreateDefaultCalendarAsync(CreateCalendarViewModel model)
     {
         using var transaction = await _calendarRepository.BeginTransactionAsync();
@@ -367,7 +440,7 @@ public class CalendarService : ICalendarService
             {
                 Id = Guid.NewGuid(),
                 Name = model.Name,
-                IsDefault = true,
+                IsDefault = model.IsDefault,
                 CountryCode = model.CountryCode,
                 ShareableLink = Guid.NewGuid().ToString(),
                 CreatedAt = DateTime.UtcNow,
@@ -385,6 +458,20 @@ public class CalendarService : ICalendarService
         }
     }
 
+    public async Task AddCountryAsync(Country country)
+    {
+        try
+        {
+            await _calendarRepository.AddCountryAsync(country);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding country with code {CountryCode}", country.CountryCode);
+            throw;
+        }
+    }
+
+
     public async Task DeleteCalendarAsync(Guid id)
     {
         using var transaction = await _calendarRepository.BeginTransactionAsync();
@@ -401,6 +488,18 @@ public class CalendarService : ICalendarService
         }
     }
 
+    public async Task UpdateUserCalendarCountryAsync(Guid calendarId, string countryCode)
+    {
+        try
+        {
+            await _calendarRepository.UpdateUserCalendarCountryAsync(calendarId, countryCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating country code for calendar {CalendarId}", calendarId);
+            throw;
+        }
+    }
 
 
     public async Task<CalendarDto> AddHolidayAsync(Guid calendarId, Holiday holiday)
@@ -536,6 +635,10 @@ public class CalendarService : ICalendarService
         }
     }
 
+    public async Task<IEnumerable<Holiday>> GetHolidaysByCalendarIdAsync(Guid calendarId)
+    {
+        return await _calendarHolidayRepository.GetHolidaysByCalendarIdAsync(calendarId);
+    }
 
     public async Task<string> GenerateShareableLinkAsync(Guid calendarId)
     {
@@ -548,7 +651,7 @@ public class CalendarService : ICalendarService
         return calendar.ShareableLink;
     }
 
-    public async Task<Event> UpdateEventAsync(Guid calendarId, Event @event)
+    public async Task<Event> UpdateEventAsync(Guid calendarId, Event @event, long userId, bool isAdmin)
     {
         using var transaction = await _calendarRepository.BeginTransactionAsync();
         try
@@ -557,34 +660,51 @@ public class CalendarService : ICalendarService
             if (calendar == null)
                 throw new ArgumentException("Calendar not found");
 
+            // Authorization Check
+            if (!isAdmin && calendar.CreatedBy != userId)
+                throw new UnauthorizedAccessException("You are not authorized to edit this event.");
+
             @event.ModifiedAt = DateTime.UtcNow;
             await _calendarRepository.UpdateEventAsync(@event);
+
             await transaction.CommitAsync();
             return @event;
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
-            _logger.LogError(ex, "Error updating event");
+            _logger.LogError(ex, "Error updating event for calendar {CalendarId}", calendarId);
             throw;
         }
     }
 
-    public async Task DeleteEventAsync(Guid calendarId, Guid eventId)
+
+    public async Task DeleteEventAsync(Guid calendarId, Guid eventId, long userId, bool isAdmin)
     {
         using var transaction = await _calendarRepository.BeginTransactionAsync();
         try
         {
+            var calendar = await _calendarRepository.GetByIdAsync(calendarId);
+            if (calendar == null)
+                throw new ArgumentException("Calendar not found");
+
+            // Authorization Check
+            if (!isAdmin && calendar.CreatedBy != userId)
+                throw new UnauthorizedAccessException("You are not authorized to delete this event.");
+
             await _calendarRepository.DeleteEventAsync(eventId);
+
             await transaction.CommitAsync();
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync();
-            _logger.LogError(ex, "Error deleting event");
+            _logger.LogError(ex, "Error deleting event for calendar {CalendarId}", calendarId);
             throw;
         }
     }
+
+
 
     public async Task<IEnumerable<Event>> GetEventsByCalendarIdAsync(Guid calendarId)
     {

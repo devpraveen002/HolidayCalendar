@@ -35,7 +35,8 @@
                         @if (User.Identity.IsAuthenticated)
                         {
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="Calendar" asp-action="Dashboard">Dashboard</a>
+                                <!-- Redirect to AdminDashboard for admins, Dashboard for other users -->
+                                <a class="nav-link" asp-controller="Calendar" asp-action="@((User.IsInRole("Admin")) ? "AdminDashboard" : "Dashboard")">Dashboard</a>
                             </li>
                             <li class="nav-item">
                                 <form asp-controller="Account" asp-action="Logout" method="post">

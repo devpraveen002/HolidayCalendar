@@ -1,13 +1,9 @@
-﻿using HolidayCalendar.src.HolidayCalendar.Core.Entities;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace HolidayCalendar.src.HolidayCalendar.Web.ViewModels;
 
-public class EditEventViewModel
+public class AddEventViewModel
 {
-    [Required]
-    public Guid EventId { get; set; }
-
     [Required]
     public Guid CalendarId { get; set; }
 
@@ -23,5 +19,4 @@ public class EditEventViewModel
 
     [Required]
     public DateTime EndDate { get; set; }
-    //public Event Event { get; set; }
 }

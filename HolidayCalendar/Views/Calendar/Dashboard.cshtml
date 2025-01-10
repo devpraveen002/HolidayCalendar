@@ -1,16 +1,11 @@
-﻿@model DashboardViewModel
-@using System.Security.Claims
+﻿@model IEnumerable<CalendarSummaryViewModel>
 
 <div class="container py-5">
-    <h1>@(User.IsInRole("Admin") ? "Admin Dashboard" : "My Calendars")</h1>
+    <h1>My Calendars</h1>
 
-    @if (User.IsInRole("Admin"))
-    {
-        <div class="d-flex justify-content-end mb-4">
-            <a asp-action="CreateCountryCalendar" class="btn btn-primary">Create Country Calendar</a>
-            <a asp-action="Create" class="btn btn-secondary ms-2">Create New Calendar</a>
-        </div>
-    }
+    <div class="d-flex justify-content-end mb-4">
+        <a asp-action="CreateUserCalendar" class="btn btn-primary">Create New Calendar</a>
+    </div>
 
     <table class="table table-bordered table-striped mt-4">
         <thead class="table-dark">
@@ -18,30 +13,35 @@
                 <th>Name</th>
                 <th>Country</th>
                 <th>Holidays</th>
-                <th>Default</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
-            @foreach (var calendar in Model.Calendars)
+            @foreach (var calendar in Model)
             {
                 <tr>
                     <td>@calendar.Name</td>
                     <td>@calendar.CountryCode</td>
                     <td>@calendar.HolidayCount</td>
-                    <td>@(calendar.IsDefault ? "Yes" : "No")</td>
                     <td>
                         <!-- View Button -->
-                        <a asp-action="Index" asp-route-id="@calendar.Id" class="btn btn-primary btn-sm">View</a>
+                        <a asp-action="View" asp-route-id="@calendar.Id" class="btn btn-primary btn-sm">View</a>
 
                         <!-- Edit Button -->
-                        <a asp-action="Edit" asp-route-id="@calendar.Id" class="btn btn-warning btn-sm mx-1">Edit</a>
+                        <a asp-action="EditUserCalendar" asp-route-id="@calendar.Id" class="btn btn-warning btn-sm mx-1">Edit</a>
 
-                        <!-- Delete Button -->
-                        @if (User.IsInRole("Admin") || calendar.CreatedBy.ToString() == User.FindFirstValue(ClaimTypes.NameIdentifier))
-                        {
-                            <a asp-action="Delete" asp-route-id="@calendar.Id" class="btn btn-danger btn-sm">Delete</a>
-                        }
+                        <!-- Delete Button with Confirmation -->
+                        <form asp-action="DeleteUserCalendar" asp-route-calendarId="@calendar.Id" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('Are you sure you want to delete this calendar?');">
+                                Delete
+                            </button>
+                        </form>
+
+                        <!-- Share Button -->
+                        <a asp-action="GenerateShareableLink" asp-route-calendarId="@calendar.Id" class="btn btn-outline-secondary btn-sm">
+                            <i class="fa fa-share"></i> Share
+                        </a>
                     </td>
                 </tr>
             }

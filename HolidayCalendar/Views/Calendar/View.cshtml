@@ -1,41 +1,32 @@
 ﻿@model CalendarViewModel
-@{
-    ViewData["Title"] = Model.Calendar.Name;
-    var firstDay = new DateTime(Model.CurrentYear, Model.CurrentMonth, 1);
-    var startingDayOfWeek = (int)firstDay.DayOfWeek;
-    var daysInMonth = DateTime.DaysInMonth(Model.CurrentYear, Model.CurrentMonth);
-    var currentWeek = new List<DateTime?>();
-}
 
-<div class="container-fluid py-3">
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <h2>@Model.Calendar.Name</h2>
-            @if (!string.IsNullOrEmpty(Model.ShareableLink))
-            {
-                <div class="input-group mt-2" style="max-width: 500px;">
-                    <input type="text" class="form-control" value="@Context.Request.Scheme://@Context.Request.Host/Calendar/View?shareableLink=@Model.ShareableLink" readonly>
-                    <button class="btn btn-outline-primary">Copy Link</button>
-                </div>
-            }
-        </div>
-        <div class="col-md-6 text-end">
-            <a asp-action="Dashboard" class="btn btn-secondary">Back to Dashboard</a>
-        </div>
+<div class="container py-5">
+    <!-- Calendar Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-center">@Model.Calendar.Name</h1>
+        <a asp-action="CreateUserCalendar" class="btn btn-primary">
+            <i class="fa fa-plus"></i> Create New Calendar
+        </a>
     </div>
 
-    <!-- Calendar Navigation -->
+    <!-- Country Selection -->
+    <form asp-action="View" method="get" class="d-flex mb-4">
+        <label for="countryDropdown" class="me-2 align-self-center">Switch Country:</label>
+        <select id="countryDropdown" asp-for="SelectedCountry" asp-items="Model.AvailableCountries" class="form-select me-2 w-auto"></select>
+        <button type="submit" class="btn btn-secondary">
+            <i class="fa fa-globe"></i> Go
+        </button>
+    </form>
+
+    <!-- Month/Year Navigation -->
     <div class="row mb-4">
         <div class="col-md-6">
             <form asp-action="View" method="get" class="d-flex gap-2">
-                <input type="hidden" name="id" value="@Model.Calendar.Id" />
-                <input type="hidden" name="shareableLink" value="@Model.ShareableLink" />
+                <input type="hidden" name="SelectedCountry" value="@Model.SelectedCountry" />
                 <select name="month" class="form-select w-auto">
                     @for (int i = 1; i <= 12; i++)
                     {
-                        <option value="@i" selected="@(i == Model.CurrentMonth)">
-                            @(new DateTime(2024, i, 1).ToString("MMMM"))
-                        </option>
+                        <option value="@i" selected="@(i == Model.CurrentMonth)">@DateTime.Now.AddMonths(i - DateTime.Now.Month).ToString("MMMM")</option>
                     }
                 </select>
                 <select name="year" class="form-select w-auto">
@@ -48,152 +39,89 @@
             </form>
         </div>
         <div class="col-md-6 text-end">
-            <a asp-action="View" asp-route-id="@Model.Calendar.Id" asp-route-shareableLink="@Model.ShareableLink"
+            <a asp-action="View" asp-route-SelectedCountry="@Model.SelectedCountry"
                asp-route-month="@Model.PreviousMonth" asp-route-year="@Model.PreviousYear"
                class="btn btn-outline-primary">Previous</a>
-            <a asp-action="View" asp-route-id="@Model.Calendar.Id" asp-route-shareableLink="@Model.ShareableLink"
+            <a asp-action="View" asp-route-SelectedCountry="@Model.SelectedCountry"
                asp-route-month="@Model.NextMonth" asp-route-year="@Model.NextYear"
                class="btn btn-outline-primary">Next</a>
         </div>
     </div>
 
-    <!-- Calendar Grid -->
-    <div class="card">
-        <div class="card-body p-2">
-            <div class="row g-0 text-center fw-bold border-bottom pb-2 mb-2">
-                <div class="col border-end p-2">Sun</div>
-                <div class="col border-end p-2">Mon</div>
-                <div class="col border-end p-2">Tue</div>
-                <div class="col border-end p-2">Wed</div>
-                <div class="col border-end p-2">Thu</div>
-                <div class="col border-end p-2">Fri</div>
-                <div class="col p-2">Sat</div>
-            </div>
-
-            @for (int i = 0; i < 42; i++)
-            {
-                var dayNumber = i - startingDayOfWeek + 1;
-                var date = dayNumber > 0 && dayNumber <= daysInMonth
-                ? new DateTime(Model.CurrentYear, Model.CurrentMonth, dayNumber)
-                : (DateTime?)null;
-
-                currentWeek.Add(date);
-
-                @if ((i + 1) % 7 == 0)
+    <!-- Calendar -->
+    <div class="calendar-container">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Sun</th>
+                    <th>Mon</th>
+                    <th>Tue</th>
+                    <th>Wed</th>
+                    <th>Thu</th>
+                    <th>Fri</th>
+                    <th>Sat</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var week = 0; week < 6; week++)
                 {
-                    <div class="row g-0 border-bottom calendar-week">
-                        @foreach (var weekDate in currentWeek)
+                    <tr>
+                        @for (var day = 0; day < 7; day++)
                         {
-                            var holiday = weekDate.HasValue
-                            ? Model.Holidays.FirstOrDefault(h => h.Date.Date == weekDate.Value.Date)
-                            : null;
+                            var currentDay = week * 7 + day - (int)new DateTime(Model.CurrentYear, Model.CurrentMonth, 1).DayOfWeek + 1;
+                            var date = new DateTime(Model.CurrentYear, Model.CurrentMonth, 1).AddDays(currentDay - 1);
 
-                            var events = weekDate.HasValue
-                            ? Model.Events.Where(e => e.StartDate.Date <= weekDate.Value.Date &&
-                            e.EndDate.Date >= weekDate.Value.Date)
-                            : null;
-
-                            <div class="col border-end position-relative calendar-day @(weekDate.HasValue ? "" : "bg-light")">
-                                @if (weekDate.HasValue)
-                                {
-                                    <div class="fw-bold mb-1">@weekDate.Value.Day</div>
-                                    @if (holiday != null)
-                                    {
-                                        <div class="holiday-event">
-                                            <div class="small fw-bold text-danger">@holiday.Name</div>
-                                        </div>
-                                    }
-                                    @if (events != null && events.Any())
-                                    {
-                                        foreach (var evt in events)
+                            if (currentDay < 1 || currentDay > DateTime.DaysInMonth(Model.CurrentYear, Model.CurrentMonth))
+                            {
+                                <td class="bg-light"></td>
+                            }
+                            else
+                            {
+                                var holidays = Model.Holidays.Where(h => h.Date.Date == date.Date).ToList();
+                                var events = Model.Events.Where(e => e.StartDate.Date == date.Date).ToList();
+                                <td>
+                                    <div class="day-container">
+                                        <strong>@date.Day</strong>
+                                        @if (holidays.Any())
                                         {
-                                            <div class="custom-event">
-                                                <div class="small fw-bold text-primary">@evt.Name</div>
+                                            <ul>
+                                                @foreach (var holiday in holidays)
+                                                {
+                                                    <li>@holiday.Name</li>
+                                                }
+                                            </ul>
+                                        }
+                                        @if (events.Any())
+                                        {
+                                            <ul>
+                                                @foreach (var evt in events)
+                                                {
+                                                    <li>@evt.Name</li>
+                                                }
+                                            </ul>
+                                        }
+
+                                        @if (Model.IsEditable)
+                                        {
+                                            <div class="hover-actions">
+                                                <a asp-action="AddEvent" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@date" class="text-success">
+                                                    <i class="fa fa-plus"></i>
+                                                </a>
+                                                <a asp-action="EditEvent" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@date" class="text-warning ms-2">
+                                                    <i class="fa fa-edit"></i>
+                                                </a>
+                                                <a asp-action="DeleteEvent" asp-route-calendarId="@Model.Calendar.Id" asp-route-date="@date" class="text-danger ms-2">
+                                                    <i class="fa fa-trash"></i>
+                                                </a>
                                             </div>
                                         }
-                                    }
-                                    @if (Model.IsEditable && string.IsNullOrEmpty(Model.ShareableLink))
-                                    {
-                                        <button type="button"
-                                                class="add-event-btn"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#addEventModal"
-                                                data-date="@weekDate.Value.ToString("yyyy-MM-dd")">
-                                            +
-                                        </button>
-                                    }
-                                }
-                            </div>
+                                    </div>
+                                </td>
+                            }
                         }
-                    </div>
-                    currentWeek.Clear();
+                    </tr>
                 }
-            }
-        </div>
+            </tbody>
+        </table>
     </div>
-
-    @if (Model.IsEditable && string.IsNullOrEmpty(Model.ShareableLink))
-    {
-        <div class="card mb-4">
-            <div class="card-body d-flex justify-content-between align-items-center gap-3">
-                <div class="d-flex align-items-center gap-2">
-                    <span>Export Current Month:</span>
-                    <a asp-action="ExportToExcel" asp-route-id="@Model.Calendar.Id"
-                       asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))"
-                       class="btn btn-outline-success">
-                        <i class="fas fa-file-excel"></i> Excel
-                    </a>
-                    <a asp-action="ExportToPdf" asp-route-id="@Model.Calendar.Id"
-                       asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))"
-                       class="btn btn-outline-danger">
-                        <i class="fas fa-file-pdf"></i> PDF
-                    </a>
-                    <a asp-action="ExportToCsv" asp-route-id="@Model.Calendar.Id"
-                       asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))"
-                       class="btn btn-outline-info">
-                        <i class="fas fa-file-csv"></i> CSV
-                    </a>
-                    <a asp-action="ExportToIcs" asp-route-id="@Model.Calendar.Id"
-                       asp-route-date="@(new DateTime(Model.CurrentYear, Model.CurrentMonth, 1))"
-                       class="btn btn-outline-warning">
-                        <i class="fas fa-calendar"></i> ICS
-                    </a>
-                </div>
-
-                <div class="vr"></div>
-
-                <div class="d-flex align-items-center gap-2">
-                    <span>Export Year:</span>
-                    <select id="exportYear" name="exportYear" class="form-select" style="width: 120px">
-                        @for (int year = Model.CurrentYear - 5; year <= Model.CurrentYear + 5; year++)
-                        {
-                            <option value="@year" selected="@(year == Model.CurrentYear)">@year</option>
-                        }
-                    </select>
-                    <a asp-action="ExportYearToExcel" asp-route-id="@Model.Calendar.Id"
-                       asp-route-year="@Model.CurrentYear" class="btn btn-outline-success">
-                        <i class="fas fa-file-excel"></i> Excel
-                    </a>
-                    <a asp-action="ExportYearToPdf" asp-route-id="@Model.Calendar.Id"
-                       asp-route-year="@Model.CurrentYear" class="btn btn-outline-danger">
-                        <i class="fas fa-file-pdf"></i> PDF
-                    </a>
-                    <a asp-action="ExportYearToCsv" asp-route-id="@Model.Calendar.Id"
-                       asp-route-year="@Model.CurrentYear" class="btn btn-outline-info">
-                        <i class="fas fa-file-csv"></i> CSV
-                    </a>
-                    <a asp-action="ExportYearToIcs" asp-route-id="@Model.Calendar.Id"
-                       asp-route-year="@Model.CurrentYear" class="btn btn-outline-warning">
-                        <i class="fas fa-calendar"></i> ICS
-                    </a>
-                </div>
-            </div>
-        </div>
-    }
 </div>
-
-@if (Model.IsEditable && string.IsNullOrEmpty(Model.ShareableLink))
-{
-    <partial name="_AddHolidayModal" model="Model" />
-    <partial name="_EditHolidayModal" model="Model" />
-}

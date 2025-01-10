@@ -4,11 +4,9 @@
     <h1>Confirm Delete</h1>
     <p>Are you sure you want to delete the calendar <strong>@Model.Calendar.Name</strong>?</p>
 
-    <!-- Correctly formatted form -->
     <form asp-action="DeleteConfirmed" method="post">
         <input type="hidden" asp-for="Calendar.Id" />
         <button type="submit" class="btn btn-danger">Delete</button>
-        <!-- Correctly formatted 'a' tag -->
         <a asp-action="@((User.IsInRole("Admin")) ? "AdminDashboard" : "Dashboard")" class="btn btn-secondary">Cancel</a>
     </form>
 </div>

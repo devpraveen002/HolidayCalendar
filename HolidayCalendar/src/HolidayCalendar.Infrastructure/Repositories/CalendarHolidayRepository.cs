@@ -111,6 +111,37 @@ namespace HolidayCalendar.src.HolidayCalendar.Infrastructure.Repositories
             }
         }
 
+        public async Task RemoveHolidaysByCalendarIdAsync(Guid calendarId)
+        {
+            var calendarHolidays = await _context.CalendarHolidays
+                .Where(ch => ch.CalendarId == calendarId)
+                .ToListAsync();
+
+            if (calendarHolidays.Any())
+            {
+                _logger.LogInformation("Removing {Count} holidays for calendar {CalendarId}", calendarHolidays.Count, calendarId);
+                _context.CalendarHolidays.RemoveRange(calendarHolidays);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                _logger.LogInformation("No holidays to remove for calendar {CalendarId}", calendarId);
+            }
+        }
+
+        public async Task<IEnumerable<Holiday>> GetHolidaysByCalendarIdAsync(Guid calendarId)
+        {
+            var holidays = await _context.CalendarHolidays
+                .Where(ch => ch.CalendarId == calendarId)
+                .Include(ch => ch.Holiday) // Ensure the related Holiday entity is included
+                .Select(ch => ch.Holiday)
+                .ToListAsync();
+
+            _logger.LogInformation("Fetched {Count} holidays for calendar {CalendarId}", holidays.Count, calendarId);
+            return holidays;
+        }
+
+
         public async Task AddRangeAsync(IEnumerable<CalendarHoliday> calendarHolidays)
         {
             try

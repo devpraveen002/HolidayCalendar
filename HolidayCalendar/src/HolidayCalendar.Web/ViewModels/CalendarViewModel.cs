@@ -82,4 +82,27 @@ public class CalendarViewModel
         NextMonth = nextMonth.Month;
         NextYear = nextMonth.Year;
     }
+
+    public List<CalendarDayViewModel> GetDays()
+    {
+        var days = new List<CalendarDayViewModel>();
+        var firstDayOfMonth = new DateTime(CurrentYear, CurrentMonth, 1);
+        var daysInMonth = DateTime.DaysInMonth(CurrentYear, CurrentMonth);
+
+        for (int i = 0; i < daysInMonth; i++)
+        {
+            var date = firstDayOfMonth.AddDays(i);
+            var holidays = Holidays?.Where(h => h.Date.Date == date.Date).ToList() ?? new List<Holiday>();
+            var events = Events?.Where(e => e.StartDate.Date == date.Date).ToList() ?? new List<Event>();
+
+            days.Add(new CalendarDayViewModel
+            {
+                Date = date,
+                Holidays = holidays,
+                Events = events
+            });
+        }
+
+        return days;
+    }
 }
