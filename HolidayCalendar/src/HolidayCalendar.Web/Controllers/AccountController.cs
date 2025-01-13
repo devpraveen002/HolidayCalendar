@@ -76,17 +76,26 @@ public class AccountController : Controller
 
             if (result.Succeeded)
             {
-                if (!string.IsNullOrEmpty(returnUrl))
+                var user = await _userManager.FindByEmailAsync(model.Email);
+                if (user != null)
                 {
-                    return LocalRedirect(returnUrl);
+                    // Check if the user is an admin
+                    var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+                    if (!string.IsNullOrEmpty(returnUrl))
+                    {
+                        return LocalRedirect(returnUrl);
+                    }
+                    return isAdmin
+                        ? RedirectToAction("AdminDashboard", "Calendar")
+                        : RedirectToAction("Dashboard", "Calendar");
                 }
-                return RedirectToAction("Dashboard", "Calendar");
             }
 
             ModelState.AddModelError(string.Empty, "Invalid login attempt.");
         }
         return View(model);
     }
+
 
     [HttpPost]
     public async Task<IActionResult> Logout()

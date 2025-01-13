@@ -28,6 +28,8 @@ public interface ICalendarService
     Task<bool> IsCalendarAccessibleByUserAsync(Guid calendarId, long userId);
     Task<IEnumerable<CalendarDto>> GetAllCalendarsAsync();
     Task CreateDefaultCalendarAsync(CreateCalendarViewModel model);
+    Task<CalendarDto> GetUserCalendarByIdAsync(Guid id, string userId);
+
 
     // Export operations
     Task<byte[]> ExportMonthToExcelAsync(Guid calendarId, DateTime month);

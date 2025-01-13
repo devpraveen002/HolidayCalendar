@@ -34,7 +34,7 @@
 
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary">Create Calendar</button>
-                            <a asp-action="Dashboard" class="btn btn-outline-secondary">Cancel</a>
+                            <a href="@Url.Action(User.IsInRole("Admin") ? "AdminDashboard" : "Dashboard", "Calendar")" class="btn btn-secondary mt-3">Cancel</a>
                         </div>
                     </form>
                 </div>

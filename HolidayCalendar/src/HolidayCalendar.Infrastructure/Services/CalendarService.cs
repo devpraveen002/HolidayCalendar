@@ -704,6 +704,20 @@ public class CalendarService : ICalendarService
         }
     }
 
+    public async Task<CalendarDto> GetUserCalendarByIdAsync(Guid id, string userId)
+    {
+        var calendar = await _calendarRepository.GetByIdAsync(id);
+        if (calendar == null || calendar.CreatedBy.ToString() != userId)
+            return null;
+
+        var holidays = await _holidayRepository.GetHolidaysByCalendarIdAsync(id);
+        return new CalendarDto
+        {
+            Calendar = calendar,
+            Holidays = holidays.ToList(),
+            ShareableLink = calendar.ShareableLink
+        };
+    }
 
 
     public async Task<IEnumerable<Event>> GetEventsByCalendarIdAsync(Guid calendarId)

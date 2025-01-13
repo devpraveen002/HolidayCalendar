@@ -23,6 +23,7 @@ public class CalendarViewModel
     public IEnumerable<SelectListItem> AvailableCountries { get; set; }
     public IEnumerable<SelectListItem> AvailableMonths { get; set; }
     public IEnumerable<SelectListItem> AvailableYears { get; set; }
+    public IEnumerable<SelectListItem> AvailableCalendars { get; set; }
 
     public CalendarViewModel()
     {
@@ -47,7 +48,7 @@ public class CalendarViewModel
         // Initialize AvailableCountries as empty SelectListItem collection
         AvailableCountries = new List<SelectListItem>();
     }
-    public static CalendarViewModel FromDto(CalendarDto dto, bool isEditable)
+    public static CalendarViewModel FromDto(CalendarDto dto, bool isEditable, IEnumerable<SelectListItem> availableCalendars)
     {
         var currentDate = DateTime.Now;
         var model = new CalendarViewModel
@@ -58,7 +59,8 @@ public class CalendarViewModel
             ShareableLink = dto.ShareableLink,
             CurrentMonth = currentDate.Month,
             CurrentYear = currentDate.Year,
-            SelectedYear = currentDate.Year
+            SelectedYear = currentDate.Year,
+            AvailableCalendars = availableCalendars // Assign the calendars
         };
 
         var currentMonth = new DateTime(model.CurrentYear, model.CurrentMonth, 1);

@@ -184,6 +184,7 @@ public class CalendarController : Controller
     //    }
     //    return View(model);
     //}
+
     [Authorize]
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -230,6 +231,52 @@ public class CalendarController : Controller
         }
     }
 
+    //[Authorize]
+    //[HttpPost]
+    //[ValidateAntiForgeryToken]
+    //public async Task<IActionResult> EditEvent(EditEventViewModel model)
+    //{
+    //    if (!ModelState.IsValid)
+    //    {
+    //        TempData["Error"] = "Invalid event data.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+
+    //    try
+    //    {
+    //        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+    //        var isAdmin = User.IsInRole("Admin");
+
+    //        var eventEntity = new Event
+    //        {
+    //            Id = model.EventId,
+    //            CalendarId = model.CalendarId,
+    //            Name = model.Name,
+    //            Description = model.Description,
+    //            StartDate = model.StartDate,
+    //            EndDate = model.EndDate,
+    //            ModifiedAt = DateTime.UtcNow,
+    //            ModifiedBy = userId
+    //        };
+
+    //        await _calendarService.UpdateEventAsync(model.CalendarId, eventEntity, userId, isAdmin);
+
+    //        TempData["Success"] = "Event updated successfully!";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //    catch (UnauthorizedAccessException)
+    //    {
+    //        TempData["Error"] = "You are not authorized to edit this event.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        _logger.LogError(ex, "Error editing event");
+    //        TempData["Error"] = "An error occurred while editing the event.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //}
+
     //[Authorize(Roles = "Admin")]
     //[HttpPost]
     //public async Task<IActionResult> DeleteEvent(Guid eventId, Guid calendarId)
@@ -265,6 +312,34 @@ public class CalendarController : Controller
             return RedirectToAction("View", new { id = model.CalendarId });
         }
     }
+
+    //[Authorize]
+    //[HttpPost]
+    //[ValidateAntiForgeryToken]
+    //public async Task<IActionResult> DeleteEvent(DeleteEventViewModel model)
+    //{
+    //    try
+    //    {
+    //        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+    //        var isAdmin = User.IsInRole("Admin");
+
+    //        await _calendarService.DeleteEventAsync(model.CalendarId, model.EventId, userId, isAdmin);
+
+    //        TempData["Success"] = "Event deleted successfully!";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //    catch (UnauthorizedAccessException)
+    //    {
+    //        TempData["Error"] = "You are not authorized to delete this event.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        _logger.LogError(ex, "Error deleting event");
+    //        TempData["Error"] = "An error occurred while deleting the event.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //}
 
 
 
@@ -522,7 +597,9 @@ public class CalendarController : Controller
 
     private IActionResult RedirectBasedOnRole()
     {
-        return User.IsInRole("Admin") ? RedirectToAction(nameof(AdminDashboard)) : RedirectToAction(nameof(Dashboard));
+        return User.IsInRole("Admin")
+        ? RedirectToAction(nameof(AdminDashboard))
+        : RedirectToAction(nameof(Dashboard));
     }
 
 
@@ -704,35 +781,87 @@ public class CalendarController : Controller
         }
     }
 
+    //[Authorize]
+    //public async Task<IActionResult> View(Guid id, int? month = null, int? year = null)
+    //{
+    //    try
+    //    {
+    //        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    //        var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+
+    //        if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+    //        {
+    //            return Unauthorized();
+    //        }
+
+    //        var currentDate = DateTime.Now;
+    //        var viewModel = CalendarViewModel.FromDto(calendarDto, true);
+
+    //        viewModel.CurrentMonth = month ?? currentDate.Month;
+    //        viewModel.CurrentYear = year ?? currentDate.Year;
+
+    //        // Filter dropdown for user's calendars
+    //        var userCalendars = await _calendarService.GetUserCalendarsAsync(userId);
+    //        viewModel.AvailableCountries = userCalendars.Select(c => new SelectListItem
+    //        {
+    //            Value = c.Calendar.CountryCode,
+    //            Text = c.Calendar.Name,
+    //            Selected = c.Calendar.Id == id
+    //        }).ToList();
+
+    //        // Fetch holidays specific to the calendar
+    //        viewModel.Holidays = await _calendarService.GetHolidaysByCalendarIdAsync(id);
+    //        viewModel.Events = await _calendarService.GetEventsByCalendarIdAsync(id);
+
+    //        return View(viewModel);
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        _logger.LogError(ex, "Error loading calendar view for id {Id}", id);
+    //        return RedirectToAction("Error", "Home");
+    //    }
+    //}
+
     [Authorize]
     public async Task<IActionResult> View(Guid id, int? month = null, int? year = null)
     {
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+            var isAdmin = User.IsInRole("Admin");
 
-            if (calendarDto == null || calendarDto.Calendar.CreatedBy.ToString() != userId)
+            // Get the calendar data based on user role
+            CalendarDto calendarDto;
+            if (isAdmin)
             {
-                return Unauthorized();
+                calendarDto = await _calendarService.GetCalendarByIdAsync(id);
+            }
+            else
+            {
+                calendarDto = await _calendarService.GetUserCalendarByIdAsync(id, userId);
             }
 
-            var currentDate = DateTime.Now;
-            var viewModel = CalendarViewModel.FromDto(calendarDto, true);
-
-            viewModel.CurrentMonth = month ?? currentDate.Month;
-            viewModel.CurrentYear = year ?? currentDate.Year;
-
-            // Filter dropdown for user's calendars
-            var userCalendars = await _calendarService.GetUserCalendarsAsync(userId);
-            viewModel.AvailableCountries = userCalendars.Select(c => new SelectListItem
+            if (calendarDto == null)
             {
-                Value = c.Calendar.CountryCode,
+                TempData["Error"] = "You are not authorized to access this calendar.";
+                return RedirectToAction("Dashboard");
+            }
+
+            // Fetch all user's calendars for switching
+            var userCalendars = await _calendarService.GetUserCalendarsAsync(userId);
+            var availableCalendars = userCalendars.Select(c => new SelectListItem
+            {
+                Value = c.Calendar.Id.ToString(),
                 Text = c.Calendar.Name,
                 Selected = c.Calendar.Id == id
             }).ToList();
 
-            // Fetch holidays specific to the calendar
+            // Populate the view model
+            var viewModel = CalendarViewModel.FromDto(calendarDto, !isAdmin, availableCalendars);
+            viewModel.CurrentMonth = month ?? DateTime.Now.Month;
+            viewModel.CurrentYear = year ?? DateTime.Now.Year;
+            viewModel.AvailableCalendars = availableCalendars;
+            // Update holidays and events
             viewModel.Holidays = await _calendarService.GetHolidaysByCalendarIdAsync(id);
             viewModel.Events = await _calendarService.GetEventsByCalendarIdAsync(id);
 
@@ -741,10 +870,10 @@ public class CalendarController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading calendar view for id {Id}", id);
-            return RedirectToAction("Error", "Home");
+            TempData["Error"] = "An error occurred while loading the calendar.";
+            return RedirectToAction("Dashboard");
         }
     }
-
 
 
     [HttpPost]
@@ -775,6 +904,44 @@ public class CalendarController : Controller
             return RedirectToAction("View", new { id = calendarId });
         }
     }
+
+    //[Authorize]
+    //[HttpPost]
+    //[ValidateAntiForgeryToken]
+    //public async Task<IActionResult> AddEvent(AddEventViewModel model)
+    //{
+    //    if (!ModelState.IsValid)
+    //    {
+    //        TempData["Error"] = "Invalid event data.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+
+    //    try
+    //    {
+    //        var eventEntity = new Event
+    //        {
+    //            Id = Guid.NewGuid(),
+    //            CalendarId = model.CalendarId,
+    //            Name = model.Name,
+    //            Description = model.Description,
+    //            StartDate = model.StartDate,
+    //            EndDate = model.EndDate,
+    //            CreatedAt = DateTime.UtcNow,
+    //            CreatedBy = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))
+    //        };
+
+    //        await _calendarService.AddEventAsync(model.CalendarId, eventEntity);
+
+    //        TempData["Success"] = "Event added successfully!";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        _logger.LogError(ex, "Error adding event");
+    //        TempData["Error"] = "An error occurred while adding the event.";
+    //        return RedirectToAction("View", new { id = model.CalendarId });
+    //    }
+    //}
 
     [Authorize]
     [HttpPost]
@@ -813,7 +980,6 @@ public class CalendarController : Controller
             return RedirectToAction("View", new { id = model.CalendarId });
         }
     }
-
 
     [HttpGet]
     public async Task<IActionResult> ExportToExcel(Guid calendarId, DateTime date)
@@ -982,7 +1148,9 @@ public class CalendarController : Controller
         if (calendarDto == null) return NotFound();
 
         var currentDate = DateTime.Now;
-        var viewModel = CalendarViewModel.FromDto(calendarDto, false);
+        var availableCalendars = new List<SelectListItem>(); // Empty list for shared calendars
+
+        var viewModel = CalendarViewModel.FromDto(calendarDto, false, availableCalendars);
 
         viewModel.CurrentMonth = month ?? currentDate.Month;
         viewModel.CurrentYear = year ?? currentDate.Year;
@@ -996,6 +1164,7 @@ public class CalendarController : Controller
 
         return View("View", viewModel);
     }
+
 
     [Authorize]
     public async Task<IActionResult> GenerateShareableLink(Guid calendarId)
